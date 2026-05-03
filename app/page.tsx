@@ -302,7 +302,7 @@ function CategoryShowcase() {
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="font-inter text-xs font-semibold uppercase tracking-[0.28em] text-primary">Shop by concern</p>
-            <h2 className="mt-3 font-display font-extrabold tracking-tight text-ink">Start with your routine.</h2>
+            <h3 className="mt-3 font-display font-extrabold tracking-tight text-ink">Start with your routine.</h3>
           </div>
           <p className="max-w-md text-sm font-normal leading-7 text-ink/65">
             Explore common skincare categories through visual entry points designed for quick browsing.
