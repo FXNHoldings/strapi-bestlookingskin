@@ -21,7 +21,7 @@ export default {
         muted: '#f0f2f4',
       },
       fontFamily: {
-        // Inter is the body workhorse; Urbanist is the heading family
+        // Outfit is the body workhorse; Urbanist is the heading family
         // (used by the global h1-h6 rule and post-content h2/h3/h4).
         // Outfit and Fraunces are still loaded for elements that want them.
         sans: ['var(--font-outfit)'],

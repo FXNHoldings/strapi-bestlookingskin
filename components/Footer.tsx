@@ -62,7 +62,7 @@ export default function Footer() {
           {/* Col 2 — About. col-start-3 skips the empty 15% offset (track 2)
               on lg+, so the right-hand cluster stays anchored to the right. */}
           <div className="lg:col-start-3">
-            <h3 className="font-display font-bold text-ink">About</h3>
+            <h4 className="font-display !text-[18px] font-bold text-ink">About</h4>
             <ul className="mt-4 space-y-2 text-sm">
               <li><Link href="/"        className="text-ink/80 transition hover:text-primary">Home</Link></li>
               <li><Link href="/about"   className="text-ink/80 transition hover:text-primary">About</Link></li>
@@ -73,12 +73,12 @@ export default function Footer() {
 
           {/* Col 3 — Categories (heading only, links to be added later) */}
           <div>
-            <h3 className="font-display font-bold text-ink">Categories</h3>
+            <h4 className="font-display !text-[18px] font-bold text-ink">Categories</h4>
           </div>
 
           {/* Col 4 — Products (placeholder, links to be added later) */}
           <div>
-            <h3 className="font-display font-bold text-ink">Products</h3>
+            <h4 className="font-display !text-[18px] font-bold text-ink">Products</h4>
           </div>
         </div>
       </div>

@@ -13,9 +13,9 @@
    Scoped via [data-testid="home-page"] so other places using ProductCard
    (e.g. /products listing, related-products on a single product page)
    keep their default sizing. */
-[data-testid="home-page"] [data-testid^="product-"] h3,
-[data-testid="related-products"] [data-testid^="product-"] h3 {
-  font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem) !important;
+[data-testid="home-page"] [data-testid^="product-"] h6,
+[data-testid="related-products"] [data-testid^="product-"] h6 {
+  font-size: 16px !important;
   font-weight: 500 !important;
   line-height: 1.35 !important;
 }
@@ -27,6 +27,12 @@
   max-width: 70%;
   height: auto;
   margin: auto;
+}
+
+[data-testid^="product-"] img,
+[data-testid="home-page"] [data-testid^="product-"] img,
+[data-testid="newhome-page"] [data-testid^="product-"] img {
+  object-fit: contain !important;
 }
 
 /* Home-page image thumbnails — height 70% and centered via auto margins. */
@@ -44,15 +50,15 @@
 /* Articles section on the home page — compact post tiles:
    hide excerpt paragraph and shrink title to 14px / 500 weight.
    .line-clamp-2 distinguishes the excerpt from the date paragraph. */
-[data-testid="articles"] [data-testid^="tile-"] h3 {
-  font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem) !important;
+[data-testid="articles"] [data-testid^="tile-"] h6 {
+  font-size: 8px !important;
   font-weight: 500 !important;
   line-height: 1.35 !important;
 }
 
 /* Post category pages (e.g. /skincare-how-to-guides) — tile titles. */
-[data-testid^="category-"] [data-testid^="tile-"] h3 {
-  font-size: clamp(1rem, 0.88rem + 0.45vw, 1.2rem) !important;
+[data-testid^="category-"] [data-testid^="tile-"] h6 {
+  font-size: 8px !important;
   font-weight: 500 !important;
   line-height: 1.35 !important;
 }
@@ -85,9 +91,14 @@
 
 /* Home hero heading — overrides the site-wide h2 sizing (1.5rem) so the
    tagline reads larger. Scoped so other h2s on the page stay 1.5rem. */
-[data-testid="home-hero"] h2 {
-  font-size: clamp(2rem, 1.4rem + 2.75vw, 3.25rem) !important;
-  line-height: 1.1 !important;
+[data-testid="home-hero"] h1 {
+  font-size: clamp(2.75rem, 1.5rem + 5.6vw, 6rem) !important;
+  line-height: 0.95 !important;
+}
+
+[data-testid="our-goal"] h2 {
+  font-size: clamp(2.1rem, 1.25rem + 4vw, 5rem) !important;
+  line-height: 1.04 !important;
 }
 
 /* Welcome-intro h1 — site-wide h1 is 1.5rem; this scoped rule renders
@@ -134,6 +145,17 @@
 [data-testid="home-page"] .rounded-2xl,
 [data-testid="home-page"] .rounded-3xl {
   border-radius: 8px !important;
+}
+
+/* Category showcase images need to fill their tiles; the general homepage
+   thumbnail rule above intentionally shrinks carousel/product images. */
+[data-testid="category-showcase"] img {
+  height: 100% !important;
+  margin: 0 !important;
+}
+
+[data-testid="home-hero"] img {
+  height: 100% !important;
 }
 
 /* Self-hosted Inter (variable woff2) — body / sans workhorse. */
@@ -223,7 +245,7 @@ html, body {
   background: theme('colors.paper');
   color: theme('colors.ink');
   font-family: var(--font-outfit);
-  font-weight: 400;
+  font-weight: 300;
   /* Fluid body type: 15.2px on a 320px viewport, 17px on a 1366px+ viewport. */
   font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.0625rem);
   letter-spacing: 0.2px;
@@ -241,11 +263,12 @@ h5 { font-size: clamp(1.05rem,   0.95rem  + 0.5vw,   1.3rem)   !important; line-
 h6 { font-size: clamp(1rem,      0.92rem  + 0.4vw,   1.15rem)  !important; line-height: 1.4  !important; }
 
 /* All headings → Urbanist family + 0.2px tracking. Size is set by the fluid
-   scale above; weight is left to per-component Tailwind utilities. */
+   scale above; weight is fixed at 700 for consistent heading rhythm. */
 h1, h2, h3, h4, h5, h6,
 .post-content h1, .post-content h2, .post-content h3,
 .post-content h4, .post-content h5, .post-content h6 {
   font-family: var(--font-urbanist) !important;
+  font-weight: 700 !important;
   letter-spacing: 0.2px !important;
 }
 
@@ -258,13 +281,14 @@ h1, h2, h3, h4, h5, h6,
 .post-content h1 *, .post-content h2 *, .post-content h3 *,
 .post-content h4 *, .post-content h5 *, .post-content h6 * {
   font-family: var(--font-urbanist) !important;
+  font-weight: 700 !important;
   letter-spacing: 0.2px !important;
 }
 
 /* Post body text → Outfit */
 .post-content {
   font-family: var(--font-outfit);
-  font-weight: 400;
+  font-weight: 300;
 }
 
 /* ---------------------------------------------------------------------------
@@ -279,8 +303,13 @@ h1, h2, h3, h4, h5, h6,
 
 .post-content {
   font-size: 1rem;
+  font-weight: 300;
   line-height: 1.7;
   color: theme('colors.ink');
+}
+
+.post-content :where(p, li, blockquote, figcaption, td) {
+  font-weight: 300;
 }
 
 /* Paragraphs / headings OUTSIDE GreenShift blocks (lists handled below) */

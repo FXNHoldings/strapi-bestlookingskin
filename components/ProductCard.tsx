@@ -32,9 +32,9 @@ export default function ProductCard({
           </div>
           <div className="min-w-0">
             {product.brand && <p className="text-[11px] font-bold uppercase tracking-wider text-primary">{product.brand}</p>}
-            <h3 className="mt-1 line-clamp-2 font-display text-base font-bold leading-snug text-ink transition group-hover:text-primary">
+            <h6 className="mt-1 line-clamp-2 font-display text-base font-medium leading-snug text-ink transition group-hover:text-primary">
               {product.name}
-            </h3>
+            </h6>
             {product.currentPrice !== undefined && (
               <p className="mt-2 text-sm font-semibold text-ink">
                 {formatPrice(product.currentPrice, product.currency)}
@@ -63,9 +63,9 @@ export default function ProductCard({
           {cat && <p className="text-[11px] text-ink/45">{cat.name}</p>}
         </div>
         <Link href={href}>
-          <h3 className="mt-2 line-clamp-2 font-display text-lg font-bold leading-snug text-ink transition group-hover:text-primary">
+          <h6 className="mt-2 line-clamp-2 font-display text-base font-medium leading-snug text-ink transition group-hover:text-primary">
             {product.name}
-          </h3>
+          </h6>
         </Link>
         {product.shortDescription && (
           <p className="mt-2 line-clamp-2 text-sm leading-6 text-ink/70">{product.shortDescription}</p>

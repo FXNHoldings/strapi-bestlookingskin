@@ -43,9 +43,9 @@ export default function PostCard({
             </Link>
           )}
           <Link href={href}>
-            <h3 className="mt-2 font-display text-2xl font-bold leading-tight text-ink transition group-hover:text-primary">
+            <h6 className="mt-2 font-display text-[8px] font-medium leading-tight text-ink transition group-hover:text-primary">
               {post.title}
-            </h3>
+            </h6>
           </Link>
           {post.excerpt && (
             <p className="mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-ink/70 sm:text-base">
@@ -78,9 +78,9 @@ export default function PostCard({
           </div>
           <div className="min-w-0">
             {cat && <p className="text-[11px] font-bold uppercase tracking-wider text-primary">{cat.name}</p>}
-            <h3 className="mt-1 line-clamp-2 font-display text-base font-bold leading-snug text-ink transition group-hover:text-primary">
+            <h6 className="mt-1 line-clamp-2 font-display text-[8px] font-medium leading-snug text-ink transition group-hover:text-primary">
               {post.title}
-            </h3>
+            </h6>
             <p className="mt-2 text-xs text-ink/50">
               {fmtDate(post.publishedAt)} · {post.readingTimeMinutes ?? 5} min
             </p>
@@ -108,9 +108,9 @@ export default function PostCard({
       <div className="mt-4">
         {cat && <p className="text-[11px] font-bold uppercase tracking-wider text-primary">{cat.name}</p>}
         <Link href={href}>
-          <h3 className="mt-2 line-clamp-2 font-display text-lg font-bold leading-snug text-ink transition group-hover:text-primary">
+          <h6 className="mt-2 line-clamp-2 font-display text-[8px] font-medium leading-snug text-ink transition group-hover:text-primary">
             {post.title}
-          </h3>
+          </h6>
         </Link>
         {post.excerpt && (
           <p className="mt-2 line-clamp-2 text-sm leading-6 text-ink/70">{post.excerpt}</p>
