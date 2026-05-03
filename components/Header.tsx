@@ -142,9 +142,10 @@ export default async function Header() {
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </button>
+                  <span className="absolute left-0 right-0 top-full hidden h-2 lg:block" aria-hidden />
                   <ul
                     role="menu"
-                    className="invisible absolute right-0 top-full z-20 mt-1 min-w-[14rem] rounded-md border border-ink/10 bg-paper py-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                    className="invisible absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[14rem] rounded-md border border-ink/10 bg-paper py-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                     data-testid={`${testId}-dropdown`}
                   >
                     {item.children.map((child) => (
