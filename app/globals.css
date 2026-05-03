@@ -15,6 +15,19 @@ button {
   text-align: center !important;
 }
 
+/* Override Tailwind's `.bg-primary/10` (which would render the brand blue at
+   10% alpha) with a neutral cool-gray surface. Loaded after `@tailwind
+   utilities` so equal specificity wins via source order. */
+.bg-primary\/10 {
+  background-color: rgb(239 242 245 / var(--tw-bg-opacity, 1));
+  border-radius: 4px;
+}
+
+.border-primary\/10 {
+  border-color: rgb(239 242 245 / var(--tw-divide-opacity, 1));
+  border-radius: 4px;
+}
+
 /* Product titles inside the home page only — 1rem / 600 weight.
    Scoped via [data-testid="home-page"] so other places using ProductCard
    (e.g. /products listing, related-products on a single product page)
@@ -50,10 +63,20 @@ button {
   margin: auto;
 }
 
-/* Product single page — h4 inside the markdown description (Overview /
-   Key Features / Benefits section headings emitted by ProductDescription). */
+/* Product single page — heading typography. h1 is the product title; h3
+   is "About this product" (and any other top-of-section headings); h4 is
+   inside the markdown description (Overview / Key Features / Benefits
+   section headings emitted by ProductDescription). */
+[data-testid^="product-"] h1 {
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+}
+[data-testid^="product-"] h3 {
+  font-weight: 600 !important;
+}
 [data-testid^="product-"] h4 {
-  font-size: clamp(1rem, 0.9rem + 0.4vw, 1.25rem) !important;
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
 }
 
 /* Articles section on the home page — compact post tiles:
@@ -601,8 +624,175 @@ article[data-testid^="post-"] .post-content table th {
               rgba(0, 0, 0, 0.1) 0px 0px 1px 0px;
 }
 
-.post-content .cegg-card {
-  border: 1px solid #ddd !important;
+/* Cegg card chrome — just the visible surface (white bg + subtle border).
+   Layout (flex-row, columns, padding) is provided by the vendored Bootstrap
+   stylesheets; do NOT override the flex direction or column basis here, or the
+   inner .row > .col-* layout collapses to a left-clustered column. */
+.cegg5-container .cegg-card,
+.cegg5-container .card {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.175) !important;
+  border-radius: 0.375rem !important;
+}
+
+.cegg5-container .cegg-list-card {
+  margin-bottom: 1rem !important;
+}
+
+/* Kill .post-content paragraph margins and link underlines inside cegg cards
+   so the editorial typography rules above don't bleed into Bootstrap layout. */
+.cegg5-container p {
+  margin: 0 !important;
+}
+.post-content .cegg5-container :where(a) {
+  text-decoration: none !important;
+}
+.post-content .cegg5-container .cegg-list-card:hover .card-title {
+  text-decoration: underline !important;
+}
+
+/* =========================================================================
+   GreenShift / GSPB visual parity with WP source.
+   Scoped to .post-content so only imported post bodies are affected.
+   ========================================================================= */
+
+/* 1. Numbered heading row (blue-circle "1", "2"… + product title h2) */
+.post-content [class^="gspb_heading_sep_gsbp-"],
+.post-content [class*=" gspb_heading_sep_gsbp-"] {
+  display: flex;
+  align-items: center;
+  margin-top: 2.5rem;
+  margin-bottom: 1.4rem;
+}
+.post-content .gspb_heading_sep_before {
+  margin-right: 17px;
+  flex: 0 0 auto;
+}
+.post-content .gs-numhead__circle {
+  border: 3px solid #2184f9;
+  border-radius: 50%;
+  box-sizing: content-box;
+  display: inline-block;
+  font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  color: #2184f9;
+  width: calc(40px - 6px);
+  min-width: calc(40px - 6px);
+  height: calc(40px - 6px);
+  line-height: calc(40px - 6px);
+  font-size: 24px;
+}
+.post-content [class^="gspb_heading_sep_gsbp-"] > .gspb_heading,
+.post-content [class*=" gspb_heading_sep_gsbp-"] > .gspb_heading {
+  margin: 0 !important;
+}
+
+/* 2. Score-summary block — 2-column layout (9.3 left, conclusion right).
+   The actual horizontal row lives on the inner .gspb_container child of
+   .tmn-review-conclusion (the section is a single-child wrapper). */
+.post-content .tmn-review-conclusion > .gspb_container {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  column-gap: 20px;
+}
+.post-content .tmn-review-conclusion {
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.07);
+  padding: 15px 20px 25px 15px;
+  margin: 1.5rem 0 30px;
+}
+.post-content .tmn-review-conclusion .wp-block-greenshift-blocks-progressbar {
+  flex: 0 0 auto;
+}
+.post-content .tmn-review-conclusion > .gspb_container > .gspb_container {
+  display: flex;
+  flex-direction: column;
+  row-gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.post-content .tmn-review-conclusion .gspb_heading {
+  font-size: 26px !important;
+  line-height: 32px !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+}
+.post-content .tmn-review-conclusion .gspb_text {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0;
+}
+@media (max-width: 575.98px) {
+  .post-content .tmn-review-conclusion > .gspb_container {
+    flex-direction: column !important;
+    align-items: flex-start;
+  }
+}
+
+/* 3. Progressbar circle ("9.3" / "8.9") */
+.post-content .gspb-progressbar_circle {
+  position: relative;
+  height: 100px;
+  width: 100px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.post-content .gspb-progressbar_circle_value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111;
+  z-index: 1;
+}
+
+/* 4. Pros / Cons sections — display side-by-side (50/50 columns).
+   .tmn-pros and .tmn-cons are sibling <section>s; inline-block puts them
+   on one row. Stacks back to one column under 768px. */
+.post-content section.tmn-pros,
+.post-content section.tmn-cons {
+  display: inline-block;
+  vertical-align: top;
+  width: calc(50% - 12px);
+  box-sizing: border-box;
+}
+.post-content section.tmn-pros {
+  margin-right: 16px;
+}
+@media (max-width: 767.98px) {
+  .post-content section.tmn-pros,
+  .post-content section.tmn-cons {
+    display: block;
+    width: 100%;
+    margin-right: 0;
+  }
+}
+
+/* 5. Body paragraph spacing — 20px breathing room below every <p>. */
+.post-content p {
+  padding-bottom: 20px;
+}
+
+/* 6. Amazon merchant logo fix — the imported WP markup hard-codes
+   `https://bestlooking.skin/wp-content/plugins/content-egg/res/logos/amazon.webp`
+   which 404s on this domain. CSS `content` swap rewrites the rendered
+   image to the local `/brand/amazon.webp` we ship in `public/brand/`. */
+img.cegg-merhant-logo[src*="content-egg/res/logos/amazon"],
+img.cegg-merhant-logo[alt*="Amazon" i] {
+  content: url('/brand/amazon.webp');
+}
+
+/* Cegg list-card BUY NOW + merchant — tighten the gap between the button
+   and the merchant label (Amazon.com / Walmart / etc.) underneath. */
+.post-content .cegg-card-button {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+.post-content .cegg-merchant {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  line-height: 1.2 !important;
 }
 
 /* Buttons inside grid cards use a darker blue (#0046be) to distinguish them
@@ -841,3 +1031,10 @@ article[data-testid^="post-"][data-category="product-comparisons"] * {
   position: relative;
   font-family: var(--font-inter), system-ui, sans-serif;
 }
+
+
+
+
+
+
+

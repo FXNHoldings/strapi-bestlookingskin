@@ -55,6 +55,12 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
   const galleryImgs = (product.gallery ?? []).slice(0, 6);
   const cat = product.categories?.[0];
 
+  // Resolve ASIN for the Keepa price-history graph: prefer the explicit
+  // `asin` field, otherwise fall back to extracting it from the affiliate
+  // URL (e.g. https://www.amazon.com/dp/B00KHO5464/?tag=...).
+  const asinFromUrl = product.primaryAffiliateUrl?.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i)?.[1];
+  const asin = product.asin || asinFromUrl;
+
   const hasDiscount =
     product.originalPrice && product.currentPrice && product.originalPrice > product.currentPrice;
 
@@ -191,7 +197,7 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
           <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,1fr)]">
             {/* Description + price + BUY */}
             <div>
-              <div className="rounded-md border border-ink/10 bg-paper p-5 text-base leading-7 text-ink/80">
+              <div className="p-5 text-[14px] leading-6 text-ink/80">
                 {product.keyFeatures && product.keyFeatures.length > 0 ? (
                   <>
                     <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Key Features</p>
@@ -239,9 +245,26 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                 </a>
               )}
 
-              <p className="mt-3 text-[11px] text-ink/45">
-                <strong>Affiliate disclosure.</strong> {SITE.name} earns a commission when you buy through links on this
-                page, at no extra cost to you. Prices and availability subject to change.
+              <p className="mt-3 text-[12px] text-ink/45">
+                <strong>Affiliate disclosure</strong>
+                <span className="group relative ml-1 inline-flex align-middle">
+                  <button
+                    type="button"
+                    aria-label="Affiliate disclosure details"
+                    className="inline-flex h-4 w-4 cursor-help items-center justify-center text-ink/55 hover:text-primary focus:outline-none"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16" />
+                      <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0" />
+                    </svg>
+                  </button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none invisible absolute bottom-full left-1/2 z-20 mb-2 w-64 -translate-x-1/2 rounded-md bg-ink px-3 py-2 text-[11px] leading-snug text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  >
+                    {SITE.name} earns a commission when you buy through links on this page, at no extra cost to you. Prices and availability subject to change.
+                  </span>
+                </span>
               </p>
             </div>
 
@@ -266,16 +289,6 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                 )}
               </div>
 
-              {/* Price comparison bar chart — visual at-a-glance comparison
-                  across merchants. Bars scale to the highest price; the
-                  cheapest in-stock offer gets a "Best deal" badge. */}
-              {offerRows.filter((r) => r.price !== undefined).length >= 2 && (
-                <PriceComparisonChart
-                  rows={offerRows.filter((r) => r.price !== undefined)}
-                  currency={product.currency}
-                />
-              )}
-
               {product.lastPriceSyncAt && (
                 <p className="mt-2 text-[11px] text-ink/55">
                   Last price update was:{' '}
@@ -286,7 +299,7 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
               )}
 
               {/* Wishlist + share */}
-              <div className="mt-6 flex items-center justify-end">
+              <div className="mt-6 hidden items-center justify-end">
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 text-sm text-ink/65 transition hover:text-primary"
@@ -314,14 +327,6 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                 </ShareLink>
               </div>
 
-              {product.lastPriceSyncAt && (
-                <p className="mt-3 text-xs text-ink/55">
-                  Last updated on{' '}
-                  {new Date(product.lastPriceSyncAt).toLocaleString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                  })}
-                </p>
-              )}
             </div>{/* offers col */}
           </div>{/* 2-col wrapper */}
         </div>{/* right side */}
@@ -356,6 +361,54 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
         <section className="mt-12">
           <h2 className="font-display font-bold tracking-tight text-ink">Ingredients</h2>
           <p className="mt-4 text-sm leading-7 text-ink/75">{product.ingredients}</p>
+        </section>
+      )}
+
+      {/* Price comparison bar chart — moved above related products so it
+          spans the full content width. Bars scale to the highest price;
+          the cheapest in-stock offer gets a "Best deal" badge. */}
+      {offerRows.filter((r) => r.price !== undefined).length >= 2 && (
+        <section className="mt-16" data-testid="price-comparison">
+          <h3 className="font-display font-bold tracking-tight text-ink">Price comparison</h3>
+          <p className="mt-2 text-sm text-ink/55">
+            How {product.name} stacks up across merchants. The cheapest in-stock offer is flagged as the best deal.
+          </p>
+          <div className="mt-6">
+            <PriceComparisonChart
+              rows={offerRows.filter((r) => r.price !== undefined)}
+              currency={product.currency}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Amazon price history (Keepa) — only renders when we have an ASIN.
+          Uses Keepa's free graph PNG endpoint (no API key required); the
+          image is generated server-side by Keepa from years of price
+          tracking data, so the chart is meaningful from day one. */}
+      {asin && (
+        <section className="mt-16" data-testid="price-history">
+          <h3 className="font-display font-bold tracking-tight text-ink">Amazon price history</h3>
+          <p className="mt-2 text-sm text-ink/55">
+            Track pricing trends for {product.name} on Amazon over the last year.
+            Data courtesy of <a href={`https://keepa.com/#!product/1-${asin}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Keepa</a>.
+          </p>
+          <div className="mt-6 rounded-md border border-ink/10 bg-paper p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`https://graph.keepa.com/pricehistory.png?asin=${asin}&domain=com&amazon=1&new=1&used=0&range=365`}
+              alt={`${product.name} — Amazon price history (last 12 months)`}
+              loading="lazy"
+              className="mx-auto w-full max-w-[900px]"
+            />
+            <p className="mt-3 text-center text-[11px] text-ink/45">
+              Click the chart or visit{' '}
+              <a href={`https://keepa.com/#!product/1-${asin}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+                Keepa
+              </a>
+              {' '}for an interactive view, longer date ranges, and price-drop alerts.
+            </p>
+          </div>
         </section>
       )}
 
@@ -565,28 +618,27 @@ function PriceComparisonChart({
   const minPrice = Math.min(...rows.filter((r) => r.available).map((r) => r.price as number));
   return (
     <div
-      className="mt-5 rounded-md border border-ink/10 bg-paper p-4"
+      className="rounded-md border border-ink/10 bg-paper p-6"
       data-testid="price-comparison-chart"
     >
-      <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Price comparison</p>
-      <ul className="mt-3 space-y-3">
+      <ul className="space-y-5">
         {rows.map((r, i) => {
           const pct = maxPrice > 0 ? ((r.price as number) / maxPrice) * 100 : 0;
           const isBest = r.available && r.price === minPrice;
           return (
-            <li key={i} className="grid grid-cols-[88px_minmax(0,1fr)_72px] items-center gap-3">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-ink/80">
+            <li key={i} className="grid grid-cols-[140px_minmax(0,1fr)_120px] items-center gap-4">
+              <span className="flex items-center gap-2 text-sm font-medium text-ink/80">
                 <MerchantLogo merchant={r.merchant} />
                 <span className="truncate">{r.merchant.replace(/\.com$/, '')}</span>
               </span>
-              <span className="relative h-2.5 overflow-hidden rounded-full bg-ink/5">
+              <span className="relative h-5 overflow-hidden rounded-full bg-ink/5">
                 <span
-                  className={`absolute inset-y-0 left-0 rounded-full ${isBest ? 'bg-primary' : 'bg-ink/30'}`}
+                  className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ${isBest ? 'bg-primary' : 'bg-ink/30'}`}
                   style={{ width: `${pct}%` }}
                 />
               </span>
-              <span className="flex items-center justify-end gap-1.5 text-right text-xs">
-                <span className="font-semibold text-ink">{formatPrice(r.price as number, currency)}</span>
+              <span className="flex items-center justify-end gap-2 text-right text-sm">
+                <span className="font-bold text-ink">{formatPrice(r.price as number, currency)}</span>
                 {isBest && (
                   <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                     best

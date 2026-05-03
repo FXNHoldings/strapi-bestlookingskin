@@ -212,14 +212,14 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
                           <img
                             src={img}
                             alt={p.coverImage?.alternativeText || p.title}
-                            className="aspect-square w-full rounded object-cover"
+                            className="mx-auto aspect-square w-[70%] rounded bg-[#f7f7f7] object-cover"
                           />
                         ) : (
-                          <div className="aspect-square w-full rounded bg-muted" />
+                          <div className="mx-auto aspect-square w-[70%] rounded bg-[#f7f7f7]" />
                         )}
                         <div className="min-w-0">
-                          <p className="line-clamp-2 text-[14px] font-medium">{p.title}</p>
-                          <p className="mt-1 text-xs text-ink/55">{fmtDate(p.publishedAt)}</p>
+                          <p className="line-clamp-2 !text-[14px] !font-medium">{p.title}</p>
+                          <p className="mt-1 !text-[12px] text-ink/55">{fmtDate(p.publishedAt)}</p>
                         </div>
                       </Link>
                     </li>
