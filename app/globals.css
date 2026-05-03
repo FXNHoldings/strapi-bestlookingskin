@@ -20,6 +20,10 @@
   line-height: 1.35 !important;
 }
 
+[data-testid="home-page"] [data-testid^="product-"] p {
+  font-size: 12px !important;
+}
+
 /* Related-products media (img + video) on the single product page —
    constrained to 70% width and centered. */
 [data-testid="related-products"] img,
