@@ -5,7 +5,7 @@ const strapiHost = new URL(
 
 const nextConfig = {
   reactStrictMode: true,
-  allowedDevOrigins: ['bestlookingskin.fxnstudio.com', 'bestlooking.skin'],
+  allowedDevOrigins: ['bestlookingskin.fxnstudio.com', 'bestlooking.skin', 'www.bestlooking.skin'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: strapiHost },

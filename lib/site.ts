@@ -3,7 +3,7 @@ export const SITE = {
   tagline: 'Your trusted partner on the journey to radiant, healthy skin.',
   description:
     'Honest skincare reviews, side-by-side product comparisons, best-of roundups and how-to guides for the products people are actually shopping for.',
-  url: (process.env.NEXT_PUBLIC_SITE_URL || 'https://bestlookingskin.fxnstudio.com').replace(/\/$/, ''),
+  url: (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bestlooking.skin').replace(/\/$/, ''),
   amazonAffiliateTag: process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG || '',
   social: {
     facebook: 'https://www.facebook.com/bestlookingskin',
