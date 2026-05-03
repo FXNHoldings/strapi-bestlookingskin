@@ -35,8 +35,8 @@ export default function ContactPage() {
               Tell us what’s on your mind.
             </h2>
             <p className="mt-4 text-base leading-7 text-ink/70">
-              Fill in the form and we’ll get back to you. Submitting opens your default email client
-              with the message pre-filled — no data is sent to a server.
+              Fill in the form and we’ll get back to you. Your message goes straight to our
+              editorial inbox so we can reply from the right place.
             </p>
             <p className="mt-6 text-sm text-ink/55">
               Prefer email?{' '}

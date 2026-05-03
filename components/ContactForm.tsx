@@ -4,30 +4,41 @@ import { useState } from 'react';
 
 const CONTACT_EMAIL = 'hello@bestlooking.skin';
 
-/**
- * Client-side contact form. On submit it composes a mailto: URL with the
- * fields encoded into subject + body and opens the user's mail client.
- * Pure client-side — no backend or third-party service needed.
- */
 export default function ContactForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [opened, setOpened] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState('');
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const body = [
-      `Name: ${name}`,
-      `Email: ${email}`,
-      '',
-      message,
-    ].join('\n');
-    const subj = subject || `Contact from ${name || 'BestLooking.Skin visitor'}`;
-    const url = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
-    window.location.href = url;
-    setOpened(true);
+    setStatus('sending');
+    setStatusMessage('');
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+      const data = await response.json().catch(() => ({ message: '' }));
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Something went wrong. Please try again.');
+      }
+
+      setStatus('sent');
+      setStatusMessage(data.message || 'Thanks, your message has been sent.');
+      setName('');
+      setEmail('');
+      setSubject('');
+      setMessage('');
+    } catch (error) {
+      setStatus('error');
+      setStatusMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    }
   }
 
   return (
@@ -87,23 +98,34 @@ export default function ContactForm() {
         <button
           type="submit"
           className="inline-flex items-center rounded-full bg-primary px-6 py-3 font-display text-sm font-bold uppercase tracking-wider text-white transition hover:bg-primary-emphasis disabled:opacity-50"
-          disabled={!name || !email || !message}
+          disabled={status === 'sending' || !name || !email || !message}
         >
-          Send message
+          {status === 'sending' ? 'Sending...' : 'Send message'}
         </button>
-        {opened && (
-          <p className="text-sm text-ink/65" role="status">
-            Opening your email client… If nothing happens, write to{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary hover:underline">
-              {CONTACT_EMAIL}
-            </a>
-            .
+        {statusMessage && (
+          <p
+            className={`text-sm ${status === 'sent' ? 'text-primary' : 'text-secondary-emphasis'}`}
+            role="status"
+          >
+            {statusMessage}{' '}
+            {status === 'error' && (
+              <>
+                You can also write to{' '}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary hover:underline">
+                  {CONTACT_EMAIL}
+                </a>
+                .
+              </>
+            )}
           </p>
         )}
       </div>
       <p className="text-xs leading-5 text-ink/45">
-        Submitting this form opens your default email app with the message pre-filled — your address
-        is only used to reply to you.
+        Your message is sent securely to our editorial inbox. Prefer email?{' '}
+        <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary hover:underline">
+          {CONTACT_EMAIL}
+        </a>
+        .
       </p>
     </form>
   );
