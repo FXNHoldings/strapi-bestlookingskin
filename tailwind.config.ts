@@ -66,12 +66,15 @@ export default {
         muted: '#f7f7f7',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        inter: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        outfit: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        urbanist: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        fraunces: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        // Site-wide default = Plus Jakarta Sans. Every named family resolves
+        // here so a single token swap would change the whole site's typeface.
+        sans:     ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        display:  ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        jakarta:  ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        inter:    ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        outfit:   ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        urbanist: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        fraunces: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
       },
       maxWidth: {
         prose: '70ch',
