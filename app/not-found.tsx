@@ -108,7 +108,7 @@ export default async function NotFound() {
                 return (
                   <article key={p.id} className="group">
                     <Link href={postPath(p)} className="block">
-                      <div className="overflow-hidden rounded-md bg-[#f7f7f7]">
+                      <div className="overflow-hidden rounded-md bg-[#f5f7fd]">
                         {img ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img

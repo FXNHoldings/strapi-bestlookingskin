@@ -5,6 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Primary brand blue (Polaris primary tokens).
         primary: {
           DEFAULT: '#014fd3',
           emphasis: '#014fd3',
@@ -15,21 +16,32 @@ export default {
           highlightPressed: '#014fd3',
           hover: '#cfe9fe',
           pressed: '#9bcffc',
+          bg: '#eef8ff',
         },
         secondary: {
           DEFAULT: '#fff6d1',
-          emphasis: '#ffe200',
+          emphasis: '#914600',
           hover: '#fff200',
           pressed: '#ffce00',
         },
         success: {
+          DEFAULT: '#e5fde5',
           emphasis: '#03721e',
         },
         attention: {
+          DEFAULT: '#fff5ec',
           emphasis: '#983e00',
         },
         danger: {
+          DEFAULT: '#fff4f3',
           emphasis: '#b00625',
+        },
+        info: {
+          DEFAULT: '#f6f6f7',
+          emphasis: '#575d64',
+          highlight: '#c7c9cc',
+          hover: '#e4e5e8',
+          pressed: '#c4c8cf',
         },
         forest: {
           50: '#f0f4ff',
@@ -62,26 +74,43 @@ export default {
           700: '#7a3100',
         },
         ink: '#07142b',
-        paper: '#f7f7f7',
-        muted: '#f7f7f7',
+        paper: '#f5f7fd',
+        muted: '#f5f7fd',
+
+        // Surface / default neutrals (Polaris surface + default tokens).
+        surface: {
+          DEFAULT: '#ffffff',
+          muted: '#e4e5e8',
+          inverse: '#030303',
+          secondary: '#ffe200',
+        },
+        default: {
+          DEFAULT: '#ffffff',
+          subdued: '#f3f4f6',
+          emphasis: '#141d23',
+          hover: '#f6f6f7',
+          pressed: '#e4e5e8',
+          muted: '#fbfbfb',
+        },
       },
       fontFamily: {
-        // Site-wide default = Plus Jakarta Sans. Every named family resolves
-        // here so a single token swap would change the whole site's typeface.
+        // Headings = Figtree (700), body = Plus Jakarta Sans (300). `sans` is
+        // the site-wide body default; `display` is the heading token.
         sans:     ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
-        display:  ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        display:  ['var(--font-figtree)', 'system-ui', 'sans-serif'],
         jakarta:  ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
-        inter:    ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
-        outfit:   ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
-        urbanist: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
-        fraunces: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        inter:    ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        outfit:   ['var(--font-outfit)', 'system-ui', 'sans-serif'],
+        urbanist: ['var(--font-urbanist)', 'system-ui', 'sans-serif'],
+        figtree:  ['var(--font-figtree)', 'system-ui', 'sans-serif'],
+        fraunces: ['var(--font-fraunces)', 'Iowan Old Style', 'Georgia', 'serif'],
       },
       maxWidth: {
         prose: '70ch',
         // Site-wide content width override. Default Tailwind max-w-7xl is
         // 80rem (1280px); we override it to 1366px so every layout that
         // already uses `max-w-7xl mx-auto` widens without per-file edits.
-        '7xl': '1366px',
+        '7xl': '1420px',
       },
       borderRadius: {
         '3xl': '1rem',

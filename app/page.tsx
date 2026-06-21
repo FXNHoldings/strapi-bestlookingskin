@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { listPosts, listProducts, mediaUrl, type BlsPost, type BlsProduct } from '@/lib/strapi';
+import { listPosts, listProducts, type BlsPost, type BlsProduct } from '@/lib/strapi';
 import { SECTIONS, SITE } from '@/lib/site';
-import { fmtDate, firstImageUrl, postPath } from '@/lib/format';
 import PostCard from '@/components/PostCard';
 import ArticlesCarousel from '@/components/ArticlesCarousel';
 import ProductsCarousel from '@/components/ProductsCarousel';
@@ -34,30 +33,39 @@ const SKINCARE_TYPES: { label: string; query: string }[] = [
 const TOOLS: ToolCard[] = [
   { title: 'How-To Guides',         href: '/how-to-guides',           blurb: 'Step-by-step routines and layering rules.',     emoji: '📖' },
   { title: 'Top-Rated Products',    href: '/top-rated-products',      blurb: 'The standouts across cleansers, serums, SPF.',  emoji: '⭐' },
-  { title: 'Product Reviews',       href: '/product-reviews',         blurb: 'Clear product verdicts, details and routine fit.', emoji: '🔎' },
+  { title: 'Product Reviews',       href: '/product-reviews',         blurb: 'Clear product verdicts, details and routine fit.', emoji: '🔎', isNew: true },
   { title: 'Informative Articles',  href: '/informative-articles',    blurb: 'Ingredients, skin types, the science behind it.', emoji: '🧪' },
   { title: 'Comparisons',           href: '/product-comparisons',     blurb: 'Side-by-side breakdowns to pick a routine.',    emoji: '⚖️' },
+];
+
+// Hero mosaic — visual tiles built from the curated /public showcase imagery.
+// Replaces the former article cards; each tile links into the matching category.
+const HERO_IMAGES: { label: string; href: string; img: string }[] = [
+  { label: 'Moisturizers', href: '/categories/moisturisers',    img: '/showcase-moisturizer.jpg' },
+  { label: 'Serums',       href: '/categories/facial-serums',   img: '/showcase-serum.jpg' },
+  { label: 'Eye Care',     href: '/categories/facial-cleansers', img: '/showcase-eyecream.jpg' },
+  { label: 'Reviews',      href: '/product-reviews',            img: '/showcase-reviews.jpg' },
 ];
 
 const SHOWCASE: { label: string; href: string; img: string }[] = [
   {
     label: 'Moisturizer',
-    href: '/products?category=moisturisers',
+    href: '/categories/moisturisers',
     img: '/showcase-moisturizer.jpg',
   },
   {
     label: 'Anti-Aging',
-    href: '/products?category=anti-aging',
+    href: '/categories/anti-aging',
     img: '/showcase-reviews.jpg',
   },
   {
     label: 'Serum',
-    href: '/products?category=facial-serums',
+    href: '/categories/facial-serums',
     img: '/showcase-serum.jpg',
   },
   {
     label: 'Eye Cream',
-    href: '/products?category=facial-cleansers',
+    href: '/categories/facial-cleansers',
     img: '/showcase-eyecream.jpg',
   },
 ];
@@ -94,23 +102,6 @@ export default async function HomePage() {
     .then((r) => r.data)
     .catch(() => [] as BlsProduct[]);
 
-  // Top-section hero posts — pulled directly from Strapi so the hero updates
-  // automatically when new posts are published.
-  const heroPosts = await listPosts({ pageSize: 5 })
-    .then((r) => r.data)
-    .catch(() => [] as BlsPost[]);
-
-  // Latest across all sections (de-duped)
-  const latest: BlsPost[] = [];
-  const seen = new Set<number>();
-  for (const p of perSection
-    .flat()
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())) {
-    if (seen.has(p.id)) continue;
-    seen.add(p.id);
-    latest.push(p);
-  }
-
   const reviews = bySection['product-reviews'] ?? [];
   const articles = bySection['informative-articles'] ?? [];
 
@@ -134,17 +125,17 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
       />
 
-      <Hero posts={heroPosts.length > 0 ? heroPosts : latest.slice(0, 5)} />
+      <Hero />
+      <WelcomeIntro />
       <section className="bg-white py-8 sm:py-10" data-testid="home-ad">
-        <div className="mx-auto max-w-7xl px-6">
-          <AdsenseUnit slot="3958661572" />
+        <div className="mx-auto max-w-7xl px-6 text-center">
+          <AdsenseUnit slot="3958661572" className="mx-auto" />
         </div>
       </section>
-      <CategoryShowcase />
       <LatestArrivals products={latestProducts} />
+      <CategoryShowcase />
       <ProductSelectionTools />
       {reviews.length > 0 && <ProductReviews posts={reviews.slice(0, 5)} />}
-      <WelcomeIntro />
       <CommitmentBlock />
       {/* Facial Serums product carousel (replaces former Moisturizer / Serum
           / Eye Cream post sections). Pulls from the bls-product-category
@@ -159,9 +150,7 @@ export default async function HomePage() {
 
 /* ---------- HERO ---------- */
 
-function Hero({ posts }: { posts: BlsPost[] }) {
-  const [feature, ...sidePosts] = posts;
-
+function Hero() {
   return (
     <section className="bg-[#fbfbf8]" data-testid="home-hero">
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 sm:py-16 lg:grid-cols-[0.88fr_1.12fr] lg:items-stretch lg:py-20">
@@ -177,42 +166,6 @@ function Hero({ posts }: { posts: BlsPost[] }) {
               Independent product research, ingredient explainers and comparison guides for building
               a routine without the guesswork.
             </p>
-            <form
-              action="/search"
-              method="get"
-              role="search"
-              className="mt-8 flex min-h-14 max-w-xl items-center gap-3 border border-ink/15 bg-white px-4 shadow-sm focus-within:border-primary"
-              data-testid="hero-search"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-5 w-5 shrink-0 text-primary"
-                aria-hidden
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-              <label htmlFor="hero-search-input" className="sr-only">Search BestLooking.Skin</label>
-              <input
-                id="hero-search-input"
-                type="search"
-                name="q"
-                placeholder="Search retinol, cleanser, vitamin C..."
-                className="h-12 min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink/45 sm:text-base"
-              />
-              <button
-                type="submit"
-                className="h-10 shrink-0 bg-ink px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-primary"
-              >
-                Search
-              </button>
-            </form>
           </div>
 
           <div className="grid gap-3 pt-8 sm:grid-cols-3">
@@ -229,114 +182,73 @@ function Hero({ posts }: { posts: BlsPost[] }) {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          {feature ? <HeroFeatureCard post={feature} /> : <HeroFallbackCard />}
-          <div className="grid gap-4">
-            {sidePosts.slice(0, 2).map((post) => (
-              <HeroSideCard key={post.id} post={post} />
-            ))}
-            <div className="border border-ink/10 bg-white p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Start here</p>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {SECTIONS.slice(0, 4).map((section) => (
-                  <Link
-                    key={section.slug}
-                    href={`/${section.slug}`}
-                    className="border border-ink/10 px-3 py-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
-                  >
-                    {section.short}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+        <HeroMosaic />
       </div>
     </section>
   );
 }
 
-function HeroFeatureCard({ post }: { post: BlsPost }) {
-  const img = mediaUrl(post.coverImage ?? null) ?? firstImageUrl(post.content);
-  const cat = post.categories?.[0];
+/* Hero image mosaic — a tall featured tile beside two stacked tiles, with a
+   full-width banner strip below. Pure imagery (no article data); each tile
+   deep-links into the matching category. */
+function HeroMosaic() {
+  const [moisturizer, serum, eyeCream, reviews] = HERO_IMAGES;
 
   return (
+    <div className="grid min-h-[520px] gap-4">
+      <div className="grid flex-1 gap-4 sm:grid-cols-[1.25fr_0.75fr]">
+        <HeroImageTile tile={moisturizer} className="min-h-[300px] sm:min-h-[400px]" featured />
+        <div className="grid gap-4">
+          <HeroImageTile tile={serum} className="min-h-[160px] sm:min-h-[192px]" />
+          <HeroImageTile tile={eyeCream} className="min-h-[160px] sm:min-h-[192px]" />
+        </div>
+      </div>
+      <HeroImageTile tile={reviews} className="min-h-[140px] sm:min-h-[152px]" wide />
+    </div>
+  );
+}
+
+function HeroImageTile({
+  tile,
+  className,
+  featured = false,
+  wide = false,
+}: {
+  tile: (typeof HERO_IMAGES)[number];
+  className: string;
+  featured?: boolean;
+  wide?: boolean;
+}) {
+  return (
     <Link
-      href={postPath(post)}
-      className="group relative block min-h-[430px] overflow-hidden bg-forest-900 text-white sm:min-h-[580px]"
+      href={tile.href}
+      className={`group relative block overflow-hidden ${className}`}
+      data-testid={`hero-image-${tile.label.toLowerCase().replace(/\s+/g, '-')}`}
     >
-      {img ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={img}
-          alt={post.coverImage?.alternativeText || post.title}
-          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-forest-300 to-forest-800" />
-      )}
-      <span className="absolute inset-0 bg-ink/35" aria-hidden />
-      <span className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-ink/90 via-ink/54 to-transparent" aria-hidden />
-      <span className="absolute bottom-6 left-6 right-6 max-w-2xl sm:bottom-8 sm:left-8 sm:right-8">
-        {cat && <span className="mb-3 inline-flex text-xs font-semibold uppercase tracking-[0.22em] text-secondary-emphasis">{cat.name}</span>}
-        <h2 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
-          {post.title}
-        </h2>
-        <span className="mt-4 block text-sm text-white/76">
-          {fmtDate(post.publishedAt)} · {post.readingTimeMinutes ?? 5} min read
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={tile.img}
+        alt={tile.label}
+        className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+      />
+      <span className="absolute inset-0 bg-ink/25 transition group-hover:bg-ink/15" aria-hidden />
+      <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink/70 to-transparent" aria-hidden />
+      <span
+        className={`absolute left-5 right-5 flex items-end justify-between gap-3 ${wide ? 'bottom-4' : 'bottom-5'}`}
+      >
+        <span
+          className={`font-display font-bold leading-none text-white ${featured ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl'}`}
+        >
+          {tile.label}
+        </span>
+        <span
+          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/90 text-base text-ink transition group-hover:translate-x-1 sm:inline-flex"
+          aria-hidden
+        >
+          →
         </span>
       </span>
     </Link>
-  );
-}
-
-function HeroSideCard({ post }: { post: BlsPost }) {
-  const img = mediaUrl(post.coverImage ?? null) ?? firstImageUrl(post.content);
-  const cat = post.categories?.[0];
-
-  return (
-    <Link
-      href={postPath(post)}
-      className="group relative block min-h-[210px] overflow-hidden bg-forest-900 text-white"
-    >
-      {img ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={img}
-          alt={post.coverImage?.alternativeText || post.title}
-          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-forest-200 to-forest-700" />
-      )}
-      <span className="absolute inset-0 bg-ink/45" aria-hidden />
-      <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-ink/85 to-transparent" aria-hidden />
-      <span className="absolute bottom-5 left-5 right-5 bg-white/92 px-4 py-3 text-ink">
-        {cat && <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">{cat.name}</span>}
-        <h6 className="hero-side-title line-clamp-2 text-base font-medium leading-tight text-ink">
-          {post.title}
-        </h6>
-      </span>
-    </Link>
-  );
-}
-
-function HeroFallbackCard() {
-  return (
-    <div className="relative min-h-[420px] overflow-hidden bg-forest-900 text-white sm:min-h-[540px]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/hero-banner-products.png"
-        alt="Curated skincare products"
-        className="absolute inset-0 h-full w-full object-cover opacity-80"
-      />
-      <span className="absolute inset-0 bg-ink/55" aria-hidden />
-      <div className="absolute bottom-8 left-8 right-8">
-        <h2 className="max-w-xl text-3xl font-bold leading-tight text-white">
-          Your guide to the best skincare.
-        </h2>
-      </div>
-    </div>
   );
 }
 
@@ -429,14 +341,10 @@ function WelcomeIntro() {
     <section className="bg-white py-20 sm:py-28" data-testid="welcome-intro">
       <div className="mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <p className="font-inter text-xs font-semibold uppercase tracking-[0.28em] text-primary">Welcome</p>
-          <h2 className="brand-welcome-title mt-4 font-display font-extrabold leading-[1.05] tracking-tight">
-            <span className="brand-welcome-main">BESTLOOKING</span>
-            <span className="brand-welcome-sub">
-              <span aria-hidden className="brand-welcome-rule" />
-              <span>SKIN</span>
-            </span>
-          </h2>
+          <h2 className="font-display font-bold tracking-tight text-ink">Welcome to bestlooking.skin</h2>
+          <p className="welcome-lead mt-7">
+            Honest reviews, real ingredient talk and routines that actually fit your skin.
+          </p>
         </div>
         <div className="space-y-6 border-l border-ink/10 pl-6 text-base font-normal leading-8 text-ink/72 sm:pl-10 sm:text-lg sm:leading-9">
           <p>
@@ -479,7 +387,7 @@ function LatestArrivals({ products }: { products: BlsProduct[] }) {
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeader
           eyebrow="Just in"
-          title="Fresh on the shelf."
+          title="Recently Added"
           subtitle="Recently added products for comparing texture, actives, price and routine fit."
           viewAll="/products"
         />
@@ -510,34 +418,34 @@ function CommitmentBlock() {
   ];
 
   return (
-    <section className="bg-ink py-16 text-white sm:py-20" data-testid="commitment-block">
+    <section className="bg-paper py-16 text-ink sm:py-20" data-testid="commitment-block">
       <div className="mx-auto max-w-7xl px-6">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Promise</p>
-            <h3 className="mt-4 max-w-xl text-white">
+            <h3 className="mt-4 max-w-xl text-ink">
               Useful advice before anything else.
             </h3>
           </div>
           <div className="max-w-2xl">
-            <p className="text-base leading-8 text-white/72 sm:text-lg sm:leading-9">
+            <p className="text-base leading-8 text-ink/70 sm:text-lg sm:leading-9">
               The platform is built to help you compare formulas, understand ingredients and
               choose routines with more confidence. We focus on useful reviews, practical education
               and product discovery that respects your skin, your budget and your time.
             </p>
-            <div className="mt-8 divide-y divide-white/12 border-y border-white/12">
+            <div className="mt-8 divide-y divide-ink/12 border-y border-ink/12">
               {commitments.map((item) => (
                 <details key={item.title} className="group py-5">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-5 [&::-webkit-details-marker]:hidden">
-                    <h6 className="text-lg font-semibold text-white">{item.title}</h6>
+                    <h6 className="text-lg font-semibold text-ink">{item.title}</h6>
                     <span
                       aria-hidden
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-white/15 text-lg leading-none text-primary transition group-open:rotate-45"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-ink/15 text-lg leading-none text-primary transition group-open:rotate-45"
                     >
                       +
                     </span>
                   </summary>
-                  <p className="mt-4 max-w-xl text-sm leading-7 text-white/68">{item.text}</p>
+                  <p className="mt-4 max-w-xl text-sm leading-7 text-ink/70">{item.text}</p>
                 </details>
               ))}
             </div>
@@ -558,7 +466,7 @@ function FacialSerumsSection({ products }: { products: BlsProduct[] }) {
           eyebrow="Editor's pick"
           title="Facial Serums"
           subtitle="Targeted treatments — vitamin C, hyaluronic, retinol and more."
-          viewAll="/products?category=facial-serums"
+          viewAll="/categories/facial-serums"
         />
         {products.length === 0 ? (
           <div className="mt-10 rounded-3xl border border-dashed border-ink/15 px-6 py-12 text-center text-sm text-ink/55">
@@ -568,7 +476,7 @@ function FacialSerumsSection({ products }: { products: BlsProduct[] }) {
           </div>
         ) : (
           <div className="mt-10 border-t border-ink/10 pt-8">
-            <ProductsCarousel products={products} thumbBg="bg-[#f7f7f7]" />
+            <ProductsCarousel products={products} thumbBg="bg-[#f5f7fd]" />
           </div>
         )}
       </div>
@@ -707,7 +615,7 @@ function SectionHeader({
   return (
     <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
-        <p className="font-inter text-xs font-semibold uppercase tracking-[0.28em] text-primary">{eyebrow}</p>
+        <p className="font-inter text-xs font-semibold uppercase tracking-[0.28em] text-[#e33333]">{eyebrow}</p>
         <h3 className="mt-3 font-display font-extrabold tracking-tight text-ink">{title}</h3>
         <p className="mt-3 max-w-2xl text-sm font-normal leading-7 text-ink/65 sm:text-base">{subtitle}</p>
       </div>

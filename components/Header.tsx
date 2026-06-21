@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { SECTIONS, SITE } from '@/lib/site';
-import { listProductCategories } from '@/lib/strapi';
+import StickyHeaderShadow from '@/components/StickyHeaderShadow';
 
 type NavItem = {
   label: string;
@@ -9,19 +9,8 @@ type NavItem = {
 };
 
 export default async function Header() {
-  const productCategories = await listProductCategories().catch(() => []);
   const nav: NavItem[] = [
-    {
-      label: 'Products',
-      href: '/products',
-      children: [
-        { label: 'All Products', href: '/products' },
-        ...productCategories.map((category) => ({
-          label: category.name,
-          href: `/products?category=${encodeURIComponent(category.slug)}`,
-        })),
-      ],
-    },
+    { label: 'Products', href: '/products' },
     { label: 'Brands', href: '/brands' },
     {
       label: 'Articles',
@@ -39,9 +28,10 @@ export default async function Header() {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b border-ink/10 bg-white backdrop-blur"
+      className="sticky top-0 z-50 border-b border-ink/10 bg-white backdrop-blur transition-shadow duration-200"
       data-testid="site-header"
     >
+      <StickyHeaderShadow />
       {/* Single row: logo + search (next to logo) + nav (right-aligned). On
           smaller screens (< lg) the nav drops to a second row underneath so
           everything stays usable on tablet/mobile. */}
@@ -105,7 +95,7 @@ export default async function Header() {
             {nav.map((item) => {
               const testId = `nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
               const linkClass =
-                'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0 py-2 text-ink/85 transition-colors hover:text-primary';
+                'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0 py-2 font-semibold tracking-[0.2px] text-ink/85 transition-colors hover:text-primary';
               if (!item.children) {
                 return (
                   <li key={item.label}>

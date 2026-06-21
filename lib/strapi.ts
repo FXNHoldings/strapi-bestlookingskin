@@ -1,6 +1,10 @@
 import qs from 'qs';
 
 const BASE = (process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.fxnstudio.com').replace(/\/$/, '');
+// commerce-products is a Strapi pool SHARED with other sites (e.g. nxt.bargains).
+// This storefront only shows products tagged for it (filtered via $containsi —
+// the JSON-array op Strapi serves reliably; $contains 500s).
+const SITE_PRODUCT_TAG = process.env.NEXT_PUBLIC_SITE_PRODUCT_TAG || 'bestlooking-skin';
 // Reads on /api/bls-* are configured as public in Strapi. Skip the
 // Authorization header when the env token is missing OR a known stale
 // value, so a rotated token doesn't 401 every fetch and silently empty
@@ -81,20 +85,14 @@ async function strapiFetch<T>(path: string, params?: Record<string, unknown>, re
 // so a slow/down CMS host never blocks page loads.
 const LOCAL_UPLOADS = '/cms-uploads';
 
-/** Convert a Strapi-hosted media URL (absolute on BASE, or relative
- *  `/uploads/...`) to the locally cached path. Untouched if it isn't
- *  Strapi-hosted (e.g. an Amazon CDN URL). */
+/** Media is served straight from Strapi. (The previous `/cms-uploads` local
+ *  mirror only contained images downloaded by migrate-cms-images.mjs, so
+ *  dynamically-imported product images 404'd; and an fs existence-check can't
+ *  run in client-reachable code. Returning the absolute Strapi URL always
+ *  loads, old or new.) Non-Strapi URLs (e.g. an Amazon CDN) pass through. */
 function toLocalUploadUrl(url: string): string {
   if (!url) return url;
-  if (url.startsWith(LOCAL_UPLOADS)) return url; // already rewritten
-  // Absolute URL on the Strapi host
-  if (url.startsWith(`${BASE}/uploads/`)) {
-    return url.replace(`${BASE}/uploads/`, `${LOCAL_UPLOADS}/`);
-  }
-  // Relative `/uploads/...`
-  if (url.startsWith('/uploads/')) {
-    return url.replace(/^\/uploads\//, `${LOCAL_UPLOADS}/`);
-  }
+  if (url.startsWith('/uploads/')) return `${BASE}${url}`;
   return url;
 }
 
@@ -120,9 +118,21 @@ function rewriteContentImages(html: string | undefined): string {
     );
 }
 
+/** Replace double-encoded / literal en-dashes with a plain hyphen, across
+ *  titles and body copy. Covers the numeric entity (`&#8211;`), the named
+ *  entity (`&ndash;`), and the raw en-dash character (U+2013). */
+function cleanDashes(s: string): string {
+  return s ? s.replace(/&#8211;|&ndash;|–/g, '-') : s;
+}
+
 /** Apply content + media rewrites to a single post. Idempotent. */
 function localizePost<T extends BlsPost>(post: T): T {
-  return { ...post, content: rewriteContentImages(post.content) };
+  return {
+    ...post,
+    title: cleanDashes(post.title),
+    excerpt: post.excerpt ? cleanDashes(post.excerpt) : post.excerpt,
+    content: cleanDashes(rewriteContentImages(post.content)),
+  };
 }
 
 const POST_POPULATE = ['coverImage', 'ogImage', 'categories', 'gallery'];
@@ -247,6 +257,16 @@ export type BlsProduct = {
   publishedAt: string;
   updatedAt: string;
   categories?: BlsProductCategory[];
+  // Full marketplace offers (one per merchant) — rendered as the price list.
+  offers?: CommerceOffer[];
+  // Raw specs blob (spread through from the commerce product) — used by the
+  // Specifications tab for the technicalSpecs key/value table.
+  specs?: {
+    keyFeatures?: string[];
+    skinTypes?: string[];
+    ingredients?: string;
+    technicalSpecs?: Record<string, string | number>;
+  };
 };
 
 type CommerceMerchant = {
@@ -254,9 +274,10 @@ type CommerceMerchant = {
   documentId?: string;
   name: string;
   slug: string;
+  logo?: StrapiImage;
 };
 
-type CommerceOffer = {
+export type CommerceOffer = {
   id: number;
   documentId?: string;
   title?: string;
@@ -305,6 +326,7 @@ type CommerceProduct = Omit<
     keyFeatures?: string[];
     skinTypes?: string[];
     ingredients?: string;
+    technicalSpecs?: Record<string, string | number>;
     seoTitle?: string;
     seoDescription?: string;
     seoKeywords?: string;
@@ -321,7 +343,7 @@ const PRODUCT_POPULATE = {
   gallery: true,
   categories: { populate: ['parent', 'children', 'image'] },
   brandRef: { populate: ['logo'] },
-  offers: { populate: ['merchant'] },
+  offers: { populate: { merchant: { populate: ['logo'] } } },
 };
 
 function merchantSlug(offer?: CommerceOffer): string {
@@ -334,8 +356,8 @@ function normalizeCommerceProduct(product: CommerceProduct): BlsProduct {
   const pricedOffers = availableOffers.filter((offer) => offer.price !== undefined);
   const bestOffer = [...pricedOffers].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))[0] ?? availableOffers[0];
   const amazonOffer = offers.find((offer) => merchantSlug(offer).startsWith('amazon')) ?? bestOffer;
-  const walmartOffer = offers.find((offer) => merchantSlug(offer) === 'walmart');
-  const ebayOffer = offers.find((offer) => merchantSlug(offer) === 'ebay');
+  const walmartOffer = offers.find((offer) => merchantSlug(offer).startsWith('walmart'));
+  const ebayOffer = offers.find((offer) => merchantSlug(offer).startsWith('ebay'));
   const lastPriceSyncAt = offers
     .map((offer) => offer.lastCheckedAt)
     .filter(Boolean)
@@ -382,7 +404,7 @@ export async function listProducts(
     sort?: 'newest' | 'price-asc' | 'price-desc' | 'rating-desc';
   } = {},
 ) {
-  const filters: Record<string, unknown> = {};
+  const filters: Record<string, unknown> = { tags: { $containsi: SITE_PRODUCT_TAG } };
   if (opts.category) filters.categories = { slug: { $eqi: opts.category } };
   const andFilters: Record<string, unknown>[] = [];
   if (opts.brand) {
@@ -433,11 +455,69 @@ export async function listProducts(
 
 export async function getProduct(slug: string): Promise<BlsProduct | null> {
   const res = await strapiFetch<ListResponse<CommerceProduct>>('commerce-products', {
-    filters: { slug: { $eq: slug } },
+    filters: { slug: { $eq: slug }, tags: { $containsi: SITE_PRODUCT_TAG } },
     populate: PRODUCT_POPULATE,
     pagination: { pageSize: 1 },
   });
   return res.data?.[0] ? normalizeCommerceProduct(res.data[0]) : null;
+}
+
+export type PricePoint = { date: string; price: number; currency?: string };
+
+/** Price-history points for a product, oldest → newest, from
+ *  commerce-price-snapshots. Used by the product page's Price History tab. */
+export async function getPriceHistory(productDocumentId: string): Promise<PricePoint[]> {
+  if (!productDocumentId) return [];
+  try {
+    const res = await strapiFetch<ListResponse<{ price?: number; currency?: string; checkedAt?: string }>>(
+      'commerce-price-snapshots',
+      {
+        filters: { product: { documentId: { $eq: productDocumentId } } },
+        fields: ['price', 'currency', 'checkedAt'],
+        sort: ['checkedAt:asc'],
+        pagination: { pageSize: 365 },
+      },
+    );
+    return (res.data ?? [])
+      .map((s) => ({ date: s.checkedAt ?? '', price: Number(s.price), currency: s.currency }))
+      .filter((p) => p.date && Number.isFinite(p.price));
+  } catch {
+    return [];
+  }
+}
+
+export type ProductReview = {
+  id: number;
+  documentId?: string;
+  authorName: string;
+  rating: number;
+  title?: string;
+  body: string;
+  createdAt: string;
+};
+
+/** Approved first-party reviews for a product, newest first, from
+ *  commerce-reviews. Only reviewStatus === 'approved' are returned. */
+export async function listProductReviews(productDocumentId: string): Promise<ProductReview[]> {
+  if (!productDocumentId) return [];
+  try {
+    const res = await strapiFetch<ListResponse<ProductReview & { reviewStatus?: string }>>(
+      'commerce-reviews',
+      {
+        filters: {
+          product: { documentId: { $eq: productDocumentId } },
+          reviewStatus: { $eq: 'approved' },
+        },
+        fields: ['authorName', 'rating', 'title', 'body', 'createdAt'],
+        sort: ['createdAt:desc'],
+        pagination: { pageSize: 50 },
+      },
+      0,
+    );
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function listProductCategories(): Promise<BlsProductCategory[]> {

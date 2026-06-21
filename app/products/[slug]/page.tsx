@@ -1,10 +1,19 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getProduct, listProducts, mediaUrl, type BlsProduct } from '@/lib/strapi';
+import { getProduct, listProducts, listPosts, getPriceHistory, listProductReviews, mediaUrl, type BlsProduct, type BlsPost } from '@/lib/strapi';
 import { SITE } from '@/lib/site';
+import { fmtDate, firstImageUrl, postPath } from '@/lib/format';
 import ProductCard from '@/components/ProductCard';
 import AdsenseUnit from '@/components/AdsenseUnit';
+import PriceAlertForm from '@/components/PriceAlertForm';
+import PriceHistoryChart from '@/components/PriceHistoryChart';
+import ArticleSidebar from '@/components/ArticleSidebar';
+import ReviewForm from '@/components/ReviewForm';
+import ReviewList from '@/components/ReviewList';
+import PriceBadges from '@/components/PriceBadges';
+import ProductSpecs from '@/components/ProductSpecs';
+import CollapsibleDescription from '@/components/CollapsibleDescription';
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -51,79 +60,175 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
     : null;
   const related = (relatedRes?.data ?? []).filter((p) => p.id !== product.id).slice(0, 5);
 
+  // Price-history points (from commerce-price-snapshots) for the Price History tab.
+  const priceHistory = await getPriceHistory(product.documentId ?? '');
+  const productReviews = await listProductReviews(product.documentId ?? '');
+
+  // Rating summary shown under the product title — prefer first-party reviews,
+  // falling back to the imported aggregate rating.
+  const fpCount = productReviews.length;
+  const fpAvg = fpCount ? productReviews.reduce((s, r) => s + r.rating, 0) / fpCount : 0;
+  const ratingValue = fpCount ? fpAvg : (product.rating ?? 0);
+  const ratingCount = fpCount || product.ratingCount || 0;
+  const ratingIsReviews = fpCount > 0;
+
+  // Specification rows (moved from the description tabs to the right column).
+  // Friendlier labels for known noisy spec keys (e.g. from Amazon data).
+  const SPEC_LABEL_OVERRIDES: Record<string, string> = {
+    'recommended uses for product': 'Recommended Uses',
+  };
+  const specRows = Object.entries(product.specs?.technicalSpecs ?? {})
+    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+    .map(([k, v]) => [
+      (SPEC_LABEL_OVERRIDES[k.toLowerCase().trim()] ?? k)
+        .replace(/<wbr\s*\/?>\s*\/\s*<wbr\s*\/?>/gi, ' / ')
+        .replace(/<wbr\s*\/?>/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+      String(v).replace(/<wbr\s*\/?>\s*\/\s*<wbr\s*\/?>/gi, '/'),
+    ] as [string, string]);
+  // Pin these labels to the top of the specifications list, in this order.
+  const SPEC_PRIORITY = ['best sellers rank', 'product benefits'];
+  specRows.sort((a, b) => {
+    const ia = SPEC_PRIORITY.indexOf(a[0].toLowerCase().trim());
+    const ib = SPEC_PRIORITY.indexOf(b[0].toLowerCase().trim());
+    return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
+  });
+
+  // Recent articles for the right-hand sidebar column.
+  const recentPosts = (await listPosts({ pageSize: 6 }).catch(() => null))?.data ?? [];
+  const recentRows = recentPosts.map((p: BlsPost) => ({
+    href: postPath(p),
+    title: p.title,
+    date: fmtDate(p.publishedAt),
+    img: mediaUrl(p.coverImage ?? null) ?? firstImageUrl(p.content),
+  }));
+
   const cover = mediaUrl(product.primaryImage ?? null);
   const galleryImgs = (product.gallery ?? []).slice(0, 6);
   const cat = product.categories?.[0];
 
-  // Resolve ASIN for the Keepa price-history graph: prefer the explicit
-  // `asin` field, otherwise fall back to extracting it from the affiliate
-  // URL (e.g. https://www.amazon.com/dp/B00KHO5464/?tag=...).
-  const asinFromUrl = product.primaryAffiliateUrl?.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i)?.[1];
-  const asin = product.asin || asinFromUrl;
-
   const hasDiscount =
     product.originalPrice && product.currentPrice && product.originalPrice > product.currentPrice;
 
-  // Build the offer-panel rows from the direct fields on the product. Adding
-  // bls-product-offer rows in Strapi later will fold in additional rows.
-  type OfferRow = { merchant: string; price?: number; url: string; available: boolean };
-  const offerRows: OfferRow[] = [];
-  if (product.primaryAffiliateUrl) {
-    offerRows.push({
-      merchant: merchantLabel(product.sourceMerchant) || 'Amazon.com',
-      price: product.currentPrice,
-      url: product.primaryAffiliateUrl,
-      available: product.available !== false,
-    });
+  // Build the offer-panel rows from the FULL offers relation (one row per
+  // marketplace offer), so every merchant the product has shows up — not just
+  // Amazon/Walmart/eBay. Falls back to the legacy flat fields only when a
+  // product has no offers relation.
+  type OfferRow = { merchant: string; price?: number; url: string; available: boolean; logoUrl?: string | null };
+  let offerRows: OfferRow[] = (product.offers ?? [])
+    .map((offer) => ({
+      merchant: merchantLabel(offer.merchant?.slug) || offer.merchant?.name || 'Store',
+      price: typeof offer.price === 'number' ? offer.price : undefined,
+      url: offer.affiliateUrl || offer.productUrl || '',
+      available: offer.availability !== 'out_of_stock' && offer.status !== 'expired',
+      logoUrl: offer.merchant?.logo ? mediaUrl(offer.merchant.logo) : undefined,
+    }))
+    .filter((row) => row.url);
+
+  if (offerRows.length === 0) {
+    if (product.primaryAffiliateUrl) {
+      offerRows.push({
+        merchant: merchantLabel(product.sourceMerchant) || 'Amazon.com',
+        price: product.currentPrice,
+        url: product.primaryAffiliateUrl,
+        available: product.available !== false,
+      });
+    }
+    if (product.walmartUrl) {
+      offerRows.push({
+        merchant: 'Walmart.com',
+        price: product.walmartPrice,
+        url: product.walmartUrl,
+        available: true,
+      });
+    }
+    if (product.ebayUrl) {
+      offerRows.push({
+        merchant: 'eBay',
+        price: product.ebayPrice,
+        url: product.ebayUrl,
+        available: true,
+      });
+    }
   }
-  if (product.walmartUrl) {
-    offerRows.push({
-      merchant: 'Walmart.com',
-      price: product.walmartPrice,
-      url: product.walmartUrl,
-      available: true,
-    });
-  }
-  if (product.ebayUrl) {
-    offerRows.push({
-      merchant: 'eBay',
-      price: product.ebayPrice,
-      url: product.ebayUrl,
-      available: true,
-    });
-  }
+  // Cheapest available offer first.
+  offerRows.sort((a, b) => {
+    if (a.available !== b.available) return a.available ? -1 : 1;
+    return (a.price ?? Infinity) - (b.price ?? Infinity);
+  });
   // "Best deal" = lowest-priced available offer
   const bestOffer = offerRows
     .filter((r) => r.available && r.price !== undefined)
     .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))[0];
 
+  // ---- Product JSON-LD (schema.org) for rich results ----
+  const imageList = [cover, ...galleryImgs.map((g) => mediaUrl(g))].filter(Boolean) as string[];
+  const plainDescription =
+    product.shortDescription ||
+    (product.description
+      ? product.description.replace(/[#*_`>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000)
+      : undefined);
+  const currency = product.currency || 'USD';
+  const pricedOffers = offerRows.filter((r) => r.price !== undefined);
+
+  const offersLd =
+    pricedOffers.length > 0
+      ? {
+          '@type': 'AggregateOffer',
+          priceCurrency: currency,
+          lowPrice: Math.min(...pricedOffers.map((r) => r.price as number)),
+          highPrice: Math.max(...pricedOffers.map((r) => r.price as number)),
+          offerCount: pricedOffers.length,
+          offers: pricedOffers.slice(0, 20).map((r) => ({
+            '@type': 'Offer',
+            price: r.price,
+            priceCurrency: currency,
+            availability: r.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: r.url,
+            seller: { '@type': 'Organization', name: r.merchant },
+          })),
+        }
+      : product.currentPrice
+        ? {
+            '@type': 'Offer',
+            price: product.currentPrice,
+            priceCurrency: currency,
+            availability: product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: product.primaryAffiliateUrl || `${SITE.url}/products/${product.slug}`,
+          }
+        : undefined;
+
   const productJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
-    image: cover ? [cover] : undefined,
-    description: product.shortDescription || product.description,
+    image: imageList.length ? imageList : undefined,
+    description: plainDescription,
     brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
-    sku: product.skuOrModel,
-    offers: product.currentPrice
-      ? {
-          '@type': 'Offer',
-          price: product.currentPrice,
-          priceCurrency: product.currency || 'USD',
-          availability: product.available
-            ? 'https://schema.org/InStock'
-            : 'https://schema.org/OutOfStock',
-          url: product.primaryAffiliateUrl || `${SITE.url}/products/${product.slug}`,
-        }
-      : undefined,
+    sku: product.skuOrModel || undefined,
+    offers: offersLd,
     aggregateRating:
-      product.rating && product.ratingCount
+      ratingValue > 0 && ratingCount > 0
         ? {
             '@type': 'AggregateRating',
-            ratingValue: product.rating,
-            ratingCount: product.ratingCount,
+            ratingValue: Number(Math.min(5, ratingValue).toFixed(1)),
+            bestRating: 5,
+            ...(ratingIsReviews ? { reviewCount: ratingCount } : { ratingCount }),
           }
         : undefined,
+    ...(productReviews.length > 0
+      ? {
+          review: productReviews.slice(0, 20).map((r) => ({
+            '@type': 'Review',
+            reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+            author: { '@type': 'Person', name: r.authorName },
+            ...(r.title ? { name: r.title } : {}),
+            ...(r.body ? { reviewBody: r.body } : {}),
+            ...(r.createdAt ? { datePublished: r.createdAt.slice(0, 10) } : {}),
+          })),
+        }
+      : {}),
   };
 
   return (
@@ -133,14 +238,14 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
       />
 
-      <nav className="flex items-center gap-2 text-xs text-ink/55" aria-label="Breadcrumb">
-        <Link href="/" className="shrink-0 hover:text-primary">Home</Link>
+      <nav className="flex items-center gap-2 border-y border-ink/10 py-3 text-[12px] font-semibold uppercase tracking-[0.3px] text-ink/55" aria-label="Breadcrumb">
+        <Link href="/" className="shrink-0 font-semibold text-primary hover:text-primary-highlight">Home</Link>
         <span>/</span>
-        <Link href="/products" className="shrink-0 hover:text-primary">Products</Link>
+        <Link href="/products" className="shrink-0 font-semibold text-primary hover:text-primary-highlight">Products</Link>
         {cat && (
           <>
             <span>/</span>
-            <Link href={`/products?category=${cat.slug}`} className="shrink-0 hover:text-primary">
+            <Link href={`/categories/${cat.slug}`} className="shrink-0 font-semibold text-primary hover:text-primary-highlight">
               {cat.name}
             </Link>
           </>
@@ -189,9 +294,25 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
               {product.brand}
             </p>
           )}
-          <h1 className="font-display font-semibold leading-snug tracking-tight text-ink" style={{ fontSize: '1.5rem' }}>
+          <h1 className="font-display font-semibold leading-snug tracking-tight text-ink" style={{ fontSize: '2rem' }}>
             {product.name}
           </h1>
+
+          {/* Rating summary under the product title */}
+          {ratingValue > 0 && (
+            <div className="mt-2 flex items-center gap-2" data-testid="product-rating-summary">
+              <span className="text-sm leading-none">
+                <span className="text-amber-400">{'★'.repeat(Math.round(ratingValue))}</span>
+                <span className="text-ink/20">{'★'.repeat(Math.max(0, 5 - Math.round(ratingValue)))}</span>
+              </span>
+              <span className="text-sm font-semibold text-ink">{ratingValue.toFixed(1)}</span>
+              {ratingCount > 0 && (
+                <span className="text-sm text-ink/55">
+                  ({ratingCount} {ratingIsReviews ? (ratingCount === 1 ? 'review' : 'reviews') : 'ratings'})
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Social share icons under product title */}
           <div className="mt-3 flex items-center gap-2" data-testid="product-share">
@@ -210,10 +331,10 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
           </div>
 
           {/* 2-col layout: description block on left, offers panel on right */}
-          <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,1fr)]">
+          <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(280px,1fr)_minmax(0,1.1fr)]">
             {/* Description + price + BUY */}
-            <div>
-              <div className="p-5 text-[14px] leading-6 text-ink/80">
+            <div className="lg:order-2">
+              <div className="p-1 text-[14px] leading-6 text-ink/80">
                 {product.keyFeatures && product.keyFeatures.length > 0 ? (
                   <>
                     <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Key Features</p>
@@ -243,22 +364,23 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                 </div>
               )}
 
+              <PriceBadges history={priceHistory} current={bestOffer?.price ?? product.currentPrice} />
+
               {bestOffer && (
-                <p className="mt-3 text-sm text-ink/70">
-                  <span className="text-ink/55">Best deal at: </span>
+                <p className="mt-[20px] flex items-center gap-1.5 text-sm text-ink/70">
+                  <span className="text-ink/55">Best deal at:</span>
+                  <MerchantLogo merchant={bestOffer.merchant} logoUrl={bestOffer.logoUrl} />
                   <span className="font-medium text-ink">{bestOffer.merchant}</span>
                 </p>
               )}
 
-              {bestOffer?.url && (
-                <a
-                  href={bestOffer.url}
-                  target="_blank"
-                  rel="noopener noreferrer sponsored"
-                  className="mt-3 inline-flex w-full items-center justify-center rounded-md bg-primary px-6 py-3.5 font-display text-base font-bold uppercase tracking-wider text-white transition hover:bg-primary-emphasis"
-                >
-                  Buy For Best Price
-                </a>
+              {(product.documentId || bestOffer?.url) && (
+                <PriceAlertForm
+                  productDocumentId={product.documentId}
+                  currency={product.currency || 'USD'}
+                  currentPrice={bestOffer?.price}
+                  buyHref={bestOffer?.url}
+                />
               )}
 
               <p className="mt-3 text-[12px] text-ink/45">
@@ -284,20 +406,54 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
               </p>
             </div>
 
-            {/* Offers panel — Amazon + Walmart + eBay rows */}
-            <div>
+            {/* Offers panel — first 5 prices, with a "view more" toggle for the
+                rest (pure-CSS checkbox toggle so this stays a server component). */}
+            <div className="lg:order-1">
               <div className="overflow-hidden rounded-md border border-ink/10">
                 {offerRows.length > 0 ? (
-                  offerRows.map((row, i) => (
-                    <OfferRow
-                      key={i}
-                      merchant={row.merchant}
-                      price={row.price}
-                      currency={product.currency}
-                      url={row.url}
-                      outOfStock={!row.available}
-                    />
-                  ))
+                  <>
+                    {offerRows.slice(0, 9).map((row, i) => (
+                      <OfferRow
+                        key={i}
+                        merchant={row.merchant}
+                        logoUrl={row.logoUrl}
+                        price={row.price}
+                        currency={product.currency}
+                        url={row.url}
+                        outOfStock={!row.available}
+                      />
+                    ))}
+                    {offerRows.length > 9 && (
+                      <>
+                        <input id="more-offers" type="checkbox" className="peer sr-only" />
+                        <div className="hidden peer-checked:block">
+                          {offerRows.slice(9).map((row, i) => (
+                            <OfferRow
+                              key={i + 9}
+                              merchant={row.merchant}
+                              logoUrl={row.logoUrl}
+                              price={row.price}
+                              currency={product.currency}
+                              url={row.url}
+                              outOfStock={!row.available}
+                            />
+                          ))}
+                        </div>
+                        <label
+                          htmlFor="more-offers"
+                          className="flex cursor-pointer items-center justify-center gap-1 border-t border-ink/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-paper peer-checked:hidden"
+                        >
+                          View {offerRows.length - 9} more {offerRows.length - 9 === 1 ? 'price' : 'prices'}
+                        </label>
+                        <label
+                          htmlFor="more-offers"
+                          className="hidden cursor-pointer items-center justify-center gap-1 border-t border-ink/10 px-4 py-1 text-sm font-semibold text-primary transition hover:bg-paper peer-checked:flex"
+                        >
+                          Show fewer
+                        </label>
+                      </>
+                    )}
+                  </>
                 ) : (
                   <p className="px-4 py-6 text-center text-sm text-ink/55">
                     No offers yet — add an Amazon, Walmart or eBay URL in Strapi.
@@ -318,13 +474,16 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                   "Last price update" line for at-a-glance merchant comparison.
                   Renders whenever at least one offer has a price; with a single
                   offer this is a one-bar reference. */}
-              {offerRows.filter((r) => r.price !== undefined).length >= 1 && (
+              {/* Price comparison chart hidden per request. To restore, change
+                  `false` back to
+                  `offerRows.filter((r) => r.price !== undefined).length >= 1`. */}
+              {false && (
                 <div className="mt-4" data-testid="price-comparison">
                   <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Price comparison</p>
                   <div className="mt-2">
                     <PriceComparisonChart
                       rows={offerRows.filter((r) => r.price !== undefined)}
-                      currency={product.currency}
+                      currency={product?.currency}
                     />
                   </div>
                 </div>
@@ -349,64 +508,104 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
         </div>{/* right side */}
       </div>{/* top section */}
 
-      <AdsenseUnit slot="3958661572" className="mt-12" />
+      {/* Lower section: descriptions etc. (75%) + recent posts sidebar. */}
+      <div className="mt-12 grid gap-y-10 lg:grid-cols-[minmax(0,65fr)_5fr_minmax(0,30fr)]" data-testid="product-detail-columns">
+        <div className="min-w-0">
+          {/* Skin types tags (key features moved up next to the title/prices). */}
+          {product.skinTypes && product.skinTypes.length > 0 && (
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Skin types</p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {product.skinTypes.map((s) => (
+                  <li key={s} className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-ink/75">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-      {/* Skin types tags (key features moved up next to the title/prices). */}
-      {product.skinTypes && product.skinTypes.length > 0 && (
-        <div className="mt-12">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink/50">Skin types</p>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {product.skinTypes.map((s) => (
-              <li key={s} className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-ink/75">
-                {s}
-              </li>
-            ))}
-          </ul>
+          {product.description && (
+            <div data-testid="product-description">
+              <h2 className="font-display text-2xl font-bold text-ink">Description</h2>
+              <CollapsibleDescription>
+                <div className="mt-4 text-base leading-7 text-ink/80">
+                  <ProductDescription markdown={product.description} />
+                </div>
+              </CollapsibleDescription>
+              {/* In-content display ad within the product description. */}
+              <div className="mt-8 text-center">
+                <AdsenseUnit slot="4749659178" format="horizontal" className="mx-auto" />
+              </div>
+            </div>
+          )}
+
+          {product.ingredients && (
+            <section className="mt-12">
+              <h2 className="font-display font-bold tracking-tight text-ink">Ingredients</h2>
+              <p className="mt-4 text-sm leading-7 text-ink/75">{product.ingredients}</p>
+            </section>
+          )}
+
         </div>
-      )}
 
-      {product.description && (
-        <section className="mt-16">
-          <h3 className="font-display font-bold tracking-tight text-ink">About this product</h3>
-          <div className="mt-6 text-base leading-7 text-ink/80">
-            <ProductDescription markdown={product.description} />
+        {/* Offset spacer column (~5%). */}
+        <div aria-hidden className="hidden lg:block" />
+
+        {/* Right column — specifications (falls back to recent posts when a
+            product has no specs). */}
+        {specRows.length > 0 || (product.keyFeatures?.length ?? 0) > 0 ? (
+          <ProductSpecs specs={specRows} pros={product.keyFeatures ?? []} />
+        ) : (
+          <ArticleSidebar popular={recentRows} recent={recentRows} />
+        )}
+      </div>
+
+      {priceHistory.length > 0 && (
+        <section className="mt-16" data-testid="price-history">
+          <h2 className="font-display font-bold tracking-tight text-ink">Price history</h2>
+          <p className="mt-3 w-full text-base leading-7 text-ink/70">
+            See how the price of {product.name} has changed over time. The chart below tracks every
+            price we&rsquo;ve recorded, so you can spot the typical range, catch recent drops, and judge
+            whether today&rsquo;s price is a genuine deal or worth waiting out before you buy.
+          </p>
+          <div className="mt-6">
+            <PriceHistoryChart points={priceHistory} />
           </div>
         </section>
       )}
 
-      {product.ingredients && (
-        <section className="mt-12">
-          <h2 className="font-display font-bold tracking-tight text-ink">Ingredients</h2>
-          <p className="mt-4 text-sm leading-7 text-ink/75">{product.ingredients}</p>
-        </section>
-      )}
+      {/* Reviews — moved out of the description tabs to its own section. */}
+      {(productReviews.length > 0 || product.documentId) && (
+        <section className="mt-16" data-testid="product-reviews">
+          <h2 className="font-display font-bold tracking-tight text-ink">Reviews</h2>
+          <div className="mt-6 grid items-start gap-10 lg:grid-cols-[300px_minmax(0,1fr)]">
+            {/* Left rail: rating summary + write-a-review form. */}
+            <div className="space-y-6 lg:sticky lg:top-24">
+              {productReviews.length > 0 && (
+                <div className="rounded-xl border border-ink/10 bg-[#f5f7fd] p-6 text-center">
+                  <p className="text-5xl font-bold leading-none text-ink">{ratingValue.toFixed(1)}</p>
+                  <span className="mt-3 inline-block relative text-xl leading-none">
+                    <span className="text-ink/20">★★★★★</span>
+                    <span
+                      className="absolute inset-0 overflow-hidden whitespace-nowrap text-amber-400"
+                      style={{ width: `${(Math.min(5, ratingValue) / 5) * 100}%` }}
+                    >
+                      ★★★★★
+                    </span>
+                  </span>
+                  <p className="mt-3 text-sm text-ink/60">
+                    Based on {ratingCount} {ratingCount === 1 ? 'review' : 'reviews'}
+                  </p>
+                </div>
+              )}
+              {product.documentId && <ReviewForm productDocumentId={product.documentId} />}
+            </div>
 
-      {/* Amazon price history (Keepa) — only renders when we have an ASIN.
-          Uses Keepa's free graph PNG endpoint (no API key required); the
-          image is generated server-side by Keepa from years of price
-          tracking data, so the chart is meaningful from day one. */}
-      {asin && (
-        <section className="mt-16" data-testid="price-history">
-          <h3 className="font-display font-bold tracking-tight text-ink">Amazon price history</h3>
-          <p className="mt-2 text-sm text-ink/55">
-            Track pricing trends for {product.name} on Amazon over the last year.
-            Data courtesy of <a href={`https://keepa.com/#!product/1-${asin}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Keepa</a>.
-          </p>
-          <div className="mt-6 rounded-md border border-ink/10 bg-paper p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://graph.keepa.com/pricehistory.png?asin=${asin}&domain=com&amazon=1&new=1&used=0&range=365`}
-              alt={`${product.name} — Amazon price history (last 12 months)`}
-              loading="lazy"
-              className="mx-auto w-full max-w-[900px]"
-            />
-            <p className="mt-3 text-center text-[11px] text-ink/45">
-              Click the chart or visit{' '}
-              <a href={`https://keepa.com/#!product/1-${asin}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
-                Keepa
-              </a>
-              {' '}for an interactive view, longer date ranges, and price-drop alerts.
-            </p>
+            {/* Right: reviews card grid. */}
+            <div>
+              <ReviewList reviews={productReviews} />
+            </div>
           </div>
         </section>
       )}
@@ -448,7 +647,14 @@ const MERCHANT_LABELS: Record<string, string> = {
 
 function merchantLabel(slug?: string | null): string {
   if (!slug) return '';
-  return MERCHANT_LABELS[slug] ?? slug;
+  if (MERCHANT_LABELS[slug]) return MERCHANT_LABELS[slug];
+  // Real provider slugs vary (e.g. walmart-affiliate-program, amazon-via-rapidapi).
+  if (slug.startsWith('amazon')) return 'Amazon.com';
+  if (slug.startsWith('walmart')) return 'Walmart.com';
+  if (slug.startsWith('ebay')) return 'eBay';
+  if (slug.startsWith('target')) return 'Target';
+  // Title-case the slug as a last resort (e.g. "best-buy" -> "Best Buy").
+  return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function ShareLink({ href, bg, children }: { href: string; bg: string; children: React.ReactNode }) {
@@ -466,43 +672,48 @@ function ShareLink({ href, bg, children }: { href: string; bg: string; children:
 
 // Merchant glyphs sourced from /public/brand/merchants/ (downloaded locally
 // so we don't depend on third-party CDNs and avoid CORS).
-function MerchantLogo({ merchant }: { merchant: string }) {
+function MerchantLogo({ merchant, logoUrl, size = 16 }: { merchant: string; logoUrl?: string | null; size?: number }) {
   const m = merchant.toLowerCase();
-  let src: string | null = null;
-  if (m.includes('walmart')) src = '/brand/merchants/walmart.png';
-  else if (m.includes('ebay')) src = '/brand/merchants/ebay.png';
-  else if (m.includes('amazon')) src = '/brand/merchants/amazon.ico';
+  // Prefer the merchant's saved logo from Strapi; fall back to local glyphs.
+  let src: string | null = logoUrl || null;
+  if (!src) {
+    if (m.includes('walmart')) src = '/brand/merchants/walmart.png';
+    else if (m.includes('ebay')) src = '/brand/merchants/ebay.png';
+    else if (m.includes('amazon')) src = '/brand/merchants/amazon.ico';
+  }
   if (!src) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={`${merchant} logo`}
-      width={16}
-      height={16}
-      className="h-4 w-4 shrink-0 object-contain"
+      width={size}
+      height={size}
+      style={{ width: size, height: size }}
+      className="shrink-0 object-contain"
     />
   );
 }
 
 function OfferRow({
-  merchant, price, currency, url, outOfStock,
+  merchant, price, currency, url, outOfStock, logoUrl,
 }: {
   merchant: string;
   price?: number;
   currency?: string;
   url: string;
   outOfStock?: boolean;
+  logoUrl?: string | null;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-ink/10 px-4 py-3 last:border-b-0 odd:bg-paper">
-      <span className="flex items-center gap-2 text-sm font-medium text-ink">
-        <MerchantLogo merchant={merchant} />
+    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-ink/10 px-4 py-1 last:border-b-0 odd:bg-paper">
+      <span className="flex items-center gap-2.5 text-xs font-normal text-ink/80">
+        <MerchantLogo merchant={merchant} logoUrl={logoUrl} size={28} />
         {merchant}
       </span>
       <span className="text-right">
         {price !== undefined && (
-          <span className="block font-bold text-ink">{formatPrice(price, currency)}</span>
+          <span className="block text-sm font-bold text-ink">{formatPrice(price, currency)}</span>
         )}
         {outOfStock && (
           <span className="block text-xs text-primary">out of stock</span>
@@ -512,7 +723,7 @@ function OfferRow({
         href={url}
         target="_blank"
         rel="noopener noreferrer sponsored"
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-emphasis"
+        className="inline-flex items-center justify-center rounded-md bg-[rgb(235,237,245)] px-4 py-2 text-xs font-semibold text-[#1b2026] transition hover:bg-[rgb(224,227,238)]"
       >
         See it
       </a>
@@ -555,7 +766,7 @@ function ProductDescription({ markdown }: { markdown: string }) {
     if (!line.trim()) { i += 1; continue; }
     if (line.startsWith('### ')) {
       blocks.push(
-        <h4 key={key++} className="mt-5 first:mt-0 text-base font-semibold text-ink">
+        <h4 key={key++} className="mt-5 first:mt-0 pt-[15px] text-base font-semibold text-ink">
           {inline(line.slice(4).trim())}
         </h4>,
       );

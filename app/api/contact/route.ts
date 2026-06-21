@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
-const CONTACT_EMAIL = process.env.CONTACT_TO_EMAIL || 'hello@bestlooking.skin';
+const CONTACT_EMAIL = process.env.CONTACT_TO_EMAIL || 'notifications@bestlooking.skin';
 
 type ContactPayload = {
   name?: string;

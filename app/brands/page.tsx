@@ -43,7 +43,7 @@ export default async function BrandsPage() {
                   {group.brands.map((brand) => (
                     <li key={brand.slug}>
                       <Link
-                        href={`/products?brand=${encodeURIComponent(brand.slug)}`}
+                        href={`/brands/${encodeURIComponent(brand.slug)}`}
                         className="block rounded-md bg-white px-4 py-3 text-sm font-medium text-ink transition hover:bg-forest-100 hover:text-primary"
                       >
                         {brand.name}

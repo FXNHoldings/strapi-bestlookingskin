@@ -93,7 +93,7 @@ export default function PostCard({
   // tile (default)
   return (
     <article className="group flex flex-col" data-testid={`tile-${post.slug}`}>
-      <Link href={href} className={`block overflow-hidden rounded-3xl ${thumbBg}`}>
+      <Link href={href} className={`block overflow-hidden rounded-3xl p-5 ${thumbBg}`}>
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

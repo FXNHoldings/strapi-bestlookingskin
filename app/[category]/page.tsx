@@ -4,7 +4,8 @@ import type { Metadata } from 'next';
 import { getCategory, listPosts, mediaUrl } from '@/lib/strapi';
 import { SECTIONS, SITE } from '@/lib/site';
 import { firstImageUrl, fmtDate, postPath } from '@/lib/format';
-import PostCard from '@/components/PostCard';
+import LoadMoreArticles from '@/components/LoadMoreArticles';
+import ArticleSidebar from '@/components/ArticleSidebar';
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -71,6 +72,30 @@ export default async function CategoryPage({
 
   const sectionMeta = SECTIONS.find((s) => s.slug === category);
 
+  // Sidebar data — same shape as the single-post page's ArticleSidebar:
+  // category image tiles (count + representative image), plus Popular (this
+  // category's posts) and Recent (across all categories) tabbed lists.
+  const categoryTiles = await Promise.all(
+    SECTIONS.map(async (s) => {
+      const r = await listPosts({ category: s.slug, pageSize: 1 }).catch(() => null);
+      const first = r?.data?.[0];
+      return {
+        href: `/${s.slug}`,
+        name: s.short,
+        count: r?.meta?.pagination?.total ?? 0,
+        image: first ? mediaUrl(first.coverImage ?? null) ?? firstImageUrl(first.content) : null,
+      };
+    }),
+  );
+  const toRow = (p: (typeof allPosts)[number]) => ({
+    href: postPath(p),
+    title: p.title,
+    date: fmtDate(p.publishedAt),
+    img: mediaUrl(p.coverImage ?? null) ?? firstImageUrl(p.content),
+  });
+  const popularRows = allPosts.slice(0, 5).map(toRow);
+  const recentRows = recentPosts.map(toRow);
+
   return (
     <div data-testid={`category-${category}`}>
       <section className="bg-paper py-12">
@@ -97,66 +122,13 @@ export default async function CategoryPage({
       </section>
 
       <section className="bg-white py-12">
-        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
-          {/* Left sidebar: categories + recent posts */}
-          <aside className="space-y-8" aria-label="Filters">
-            <div className="border border-[#ddd] p-4">
-              <h6 className="font-display text-base font-bold capitalize tracking-wider text-ink">Category</h6>
-              <ul className="mt-3 space-y-1 text-sm">
-                {SECTIONS.map((s) => {
-                  const active = s.slug === category;
-                  return (
-                    <li key={s.slug}>
-                      <Link
-                        href={`/${s.slug}`}
-                        className={
-                          active
-                            ? 'block rounded-md bg-primary/10 px-3 py-1.5 font-semibold text-primary'
-                            : 'block rounded-md px-3 py-1.5 text-ink/75 transition hover:bg-paper/60 hover:text-ink'
-                        }
-                      >
-                        {s.title}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            {recentPosts.length > 0 && (
-              <div className="border border-[#ddd] p-4">
-                <h6 className="font-display text-base font-bold capitalize tracking-wider text-ink">Recent posts</h6>
-                <ul className="mt-3 space-y-4">
-                  {recentPosts.map((p) => {
-                    const img = mediaUrl(p.coverImage ?? null) ?? firstImageUrl(p.content);
-                    return (
-                      <li key={p.id}>
-                        <Link
-                          href={postPath(p)}
-                          className="group grid grid-cols-[64px_minmax(0,1fr)] items-start gap-3 text-sm leading-snug text-ink/85 transition-colors hover:text-primary"
-                        >
-                          {img ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={img}
-                              alt={p.coverImage?.alternativeText || p.title}
-                              className="aspect-square w-full rounded object-cover"
-                            />
-                          ) : (
-                            <div className="aspect-square w-full rounded bg-muted" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="line-clamp-2 text-[14px] font-medium">{p.title}</p>
-                            <p className="mt-1 text-xs text-ink/55">{fmtDate(p.publishedAt)}</p>
-                          </div>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-          </aside>
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-12">
+          {/* Left sidebar — same widget as the single-post page's sidebar. */}
+          <ArticleSidebar
+            categoryTiles={categoryTiles}
+            popular={popularRows}
+            recent={recentRows}
+          />
 
           {/* Results */}
           <div className="min-w-0">
@@ -194,33 +166,13 @@ export default async function CategoryPage({
                 <p className="text-base">No posts here yet.</p>
               </div>
             ) : (
-              <div className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-                {posts.map((p) => (
-                  <PostCard key={p.id} post={p} variant="tile" />
-                ))}
-              </div>
-            )}
-
-            {pageCount > 1 && (
-              <nav className="mt-12 flex items-center justify-center gap-3 text-sm" data-testid="pagination">
-                {page > 1 && (
-                  <Link
-                    href={`/${category}${page - 1 > 1 ? `?page=${page - 1}` : ''}`}
-                    className="inline-flex items-center rounded-full border border-ink/15 px-4 py-2 font-medium text-ink transition hover:border-primary hover:text-primary"
-                  >
-                    ← Previous
-                  </Link>
-                )}
-                <span className="text-ink/55">Page {page} of {pageCount}</span>
-                {page < pageCount && (
-                  <Link
-                    href={`/${category}?page=${page + 1}`}
-                    className="inline-flex items-center rounded-full border border-ink/15 px-4 py-2 font-medium text-ink transition hover:border-primary hover:text-primary"
-                  >
-                    Next →
-                  </Link>
-                )}
-              </nav>
+              <LoadMoreArticles
+                category={category}
+                initialPosts={posts}
+                initialPage={page}
+                pageCount={pageCount}
+                sort={sort}
+              />
             )}
           </div>
         </div>

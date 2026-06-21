@@ -32,6 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
+        {/* Impact.com site verification — verbatim <meta name=… value=…> tag.
+            Using `value` (not Next's metadata `content`) exactly as Impact provides. */}
+        <meta {...({ name: 'impact-site-verification', value: '5018c6dc-98d5-4dd1-84ac-32c80d7fd16f' } as Record<string, string>)} />
         <script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2867376862905050"

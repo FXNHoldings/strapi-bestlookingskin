@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+// Single post stylesheet, loaded on all article single pages (App Router
+// code-splits this CSS to the post route).
+import '../../custom.css';
 import { getPost, listPosts, mediaUrl, type BlsPost } from '@/lib/strapi';
 import { SECTIONS, SITE } from '@/lib/site';
 import { fmtDate, firstImageUrl, primaryCategorySlug, postPath } from '@/lib/format';
 import PostContent from '@/components/PostContent';
-import PostCard from '@/components/PostCard';
+import RelatedCarousel from '@/components/RelatedCarousel';
+import ArticleSidebar from '@/components/ArticleSidebar';
 import AdsenseUnit from '@/components/AdsenseUnit';
 
 export const revalidate = 60;
@@ -64,13 +68,36 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
   // Pull related posts (same category, excluding this one) and recent posts
   // across all categories (for the right sidebar) in parallel.
   const [related, recentPosts] = await Promise.all([
-    listPosts({ category, pageSize: 5 })
-      .then((r) => r.data.filter((p) => p.id !== post.id).slice(0, 4))
+    listPosts({ category, pageSize: 9 })
+      .then((r) => r.data.filter((p) => p.id !== post.id).slice(0, 8))
       .catch(() => [] as BlsPost[]),
     listPosts({ pageSize: 6 })
       .then((r) => r.data.filter((p) => p.id !== post.id).slice(0, 5))
       .catch(() => [] as BlsPost[]),
   ]);
+
+  // Sidebar category tiles: count + representative (newest-post) image per section.
+  const categoryTiles = await Promise.all(
+    SECTIONS.map(async (s) => {
+      const r = await listPosts({ category: s.slug, pageSize: 1 }).catch(() => null);
+      const first = r?.data?.[0];
+      return {
+        href: `/${s.slug}`,
+        name: s.short,
+        count: r?.meta?.pagination?.total ?? 0,
+        image: first ? mediaUrl(first.coverImage ?? null) ?? firstImageUrl(first.content) : null,
+      };
+    }),
+  );
+
+  const toRow = (p: BlsPost) => ({
+    href: postPath(p),
+    title: p.title,
+    date: fmtDate(p.publishedAt),
+    img: mediaUrl(p.coverImage ?? null) ?? firstImageUrl(p.content),
+  });
+  const popularRows = related.map(toRow);
+  const recentRows = recentPosts.map(toRow);
 
   const cover = mediaUrl(post.coverImage ?? null);
   const cat = post.categories?.[0];
@@ -78,7 +105,43 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
   // Strip <em> / </em> tags from the post body — text content is kept, only
   // the wrapping element is removed (so italic emphasis no longer renders).
   // \b avoids matching <embed>; [^>]* handles any attributes.
-  const postBodyHtml = (post.content ?? '').replace(/<\/?em\b[^>]*>/gi, '');
+  const postBodyHtml = (post.content ?? '')
+    // Collapse "<wbr>/<wbr>" sequences to a single "<wbr>" (drops the slash).
+    .replace(/<wbr\s*\/?>\s*\/\s*<wbr\s*\/?>/gi, '<wbr>')
+    .replace(/<\/?em\b[^>]*>/gi, '')
+    // Remove the WordPress "more" marker (id="more-14899"). Matched generically
+    // by the id with a backreferenced close tag (<span id="more-14899"></span>,
+    // <p id="more-14899"></p>, etc.). Done before the empty-paragraph strip so a
+    // <p> that only wrapped this marker collapses to <p></p> and is dropped too.
+    .replace(/<(\w+)\b[^>]*\bid=["']?more-14899["']?[^>]*>\s*<\/\1>/gi, '')
+    // Drop empty paragraphs — those whose only content is whitespace,
+    // &nbsp;/&#160; or <br> tags (common artifacts from the WordPress import).
+    // This also removes the empty <p></p> immediately above and below the
+    // removed marker.
+    .replace(/<p\b[^>]*>(?:\s|&nbsp;|&#160;|<br\s*\/?>)*<\/p>/gi, '')
+    // Promote body heading levels (h3→h2, h4→h3, h5→h4). Single-pass map so an
+    // already-shifted tag isn't shifted again. Attributes/classes (incl. GSPB
+    // ids) are preserved, so class/id-based styling still applies.
+    .replace(/<(\/?)(h3|h4|h5)(\b[^>]*)>/gi, (_m, slash, tag, rest) => {
+      const map: Record<string, string> = { h3: 'h2', h4: 'h3', h5: 'h4' };
+      return `<${slash}${map[tag.toLowerCase()]}${rest}>`;
+    });
+
+  // Split the body near its mid-point so the in-article ad lands in the middle
+  // of the blog. Prefer a heading boundary (clean section break); fall back to
+  // the nearest paragraph end so HTML blocks are never cut open.
+  const [bodyFirst, bodySecond] = (() => {
+    const html = postBodyHtml;
+    if (html.length < 600) return [html, ''] as const;
+    const mid = Math.floor(html.length / 2);
+    const nearest = (positions: number[]) =>
+      positions.reduce((best, i) => (Math.abs(i - mid) < Math.abs(best - mid) ? i : best), -1);
+    let cut = nearest([...html.matchAll(/<h[23]\b/gi)].map((m) => m.index ?? -1).filter((i) => i > 0));
+    if (cut < 0 || Math.abs(cut - mid) > html.length * 0.35) {
+      cut = nearest([...html.matchAll(/<\/p>/gi)].map((m) => (m.index ?? -1) + 4).filter((i) => i > 0));
+    }
+    return cut > 0 ? ([html.slice(0, cut), html.slice(cut)] as const) : ([html, ''] as const);
+  })();
 
   const articleJsonLd = {
     '@context': 'https://schema.org',
@@ -97,42 +160,44 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
   };
 
   return (
+    <>
     <article
-      className="mx-auto max-w-7xl bg-white px-6 py-12"
+      className="mx-auto max-w-7xl bg-white px-6 pb-12 pt-4"
       data-testid={`post-${post.slug}`}
       data-category={category}
       data-post-type={post.postType}
     >
       {/* Vendor stylesheets used by the imported product-comparison blocks
-          (Content Egg + scoped Bootstrap). Only loaded on post pages. */}
-      <link rel="stylesheet" href="/vendor/cegg-bootstrap.min.css" />
-      <link rel="stylesheet" href="/vendor/cegg-products.min.css" />
+          (Content Egg + scoped Bootstrap, both rules scoped under
+          .cegg5-container). Loaded for this article only. */}
+      {slug === 'cerave-acne-gel-differin-gel-30-day-comparison' && (
+        <>
+          <link rel="stylesheet" href="/vendor/cegg-bootstrap.min.css" />
+          <link rel="stylesheet" href="/vendor/cegg-products.min.css" />
+        </>
+      )}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
       />
 
-      <nav className="flex items-center gap-2 text-xs text-ink/55" data-testid="breadcrumb" aria-label="Breadcrumb">
-        <Link href="/" className="shrink-0 hover:text-primary">Home</Link>
-        <span className="shrink-0">/</span>
-        <Link href={`/${category}`} className="shrink-0 hover:text-primary">
-          {cat?.name ?? categoryName(category)}
-        </Link>
-        <span className="shrink-0">/</span>
-        <span className="min-w-0 truncate text-ink/75" aria-current="page">{post.title}</span>
-      </nav>
-
       <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-12">
         {/* Main article column */}
         <div className="min-w-0">
           <header>
-            {cat && (
-              <p className="text-xs font-bold uppercase tracking-wider text-primary">{cat.name}</p>
-            )}
-            <h1 className="mt-3 font-display text-[2rem] font-bold leading-tight tracking-tight text-ink">
+            <nav className="mb-5 flex items-center gap-2 border-y border-ink/10 py-3 text-[12px] font-semibold uppercase tracking-[0.3px] text-ink/55" data-testid="breadcrumb" aria-label="Breadcrumb">
+              <Link href="/" className="shrink-0 font-semibold text-primary hover:text-primary-highlight">Home</Link>
+              <span className="shrink-0">/</span>
+              <Link href={`/${category}`} className="shrink-0 font-semibold text-primary hover:text-primary-highlight">
+                {cat?.name ?? categoryName(category)}
+              </Link>
+              <span className="shrink-0">/</span>
+              <span className="min-w-0 truncate text-ink/75" aria-current="page">{post.title}</span>
+            </nav>
+            <h1 className="font-display text-[2rem] font-bold leading-tight tracking-tight text-ink">
               {post.title}
             </h1>
-            <p className="mt-4 text-sm text-ink/55">
+            <p className="mt-4 mb-[15px] text-[14px] text-ink/55">
               Published {fmtDate(post.publishedAt)}
               {post.readingTimeMinutes ? ` · ${post.readingTimeMinutes} min read` : ''}
             </p>
@@ -148,8 +213,17 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
           )}
 
           <div>
-            <AdsenseUnit slot="3958661572" className="mb-8" />
-            <PostContent html={postBodyHtml} />
+            <PostContent html={bodyFirst} />
+            {bodySecond ? (
+              <>
+                <div className="my-10 text-center">
+                  <AdsenseUnit slot="3958661572" className="mx-auto" />
+                </div>
+                <PostContent html={bodySecond} />
+              </>
+            ) : (
+              <AdsenseUnit slot="3958661572" className="mt-8" />
+            )}
           </div>
 
           <div className="mt-12 rounded-2xl border border-ink/10 bg-muted/40 p-5 text-xs leading-5 text-ink/60">
@@ -158,78 +232,28 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
             Prices and availability are accurate as of {fmtDate(post.updatedAt)} and subject to change.
           </div>
 
-          {related.length > 0 && (
-            <aside className="mt-16">
-              <h2 className="font-display text-2xl font-bold tracking-tight text-ink">More in {cat?.name ?? categoryName(category)}</h2>
-              <div className="mt-6 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-                {related.map((r) => (
-                  <PostCard key={r.id} post={r} variant="tile" />
-                ))}
-              </div>
-            </aside>
-          )}
         </div>
 
         {/* Right sidebar: post categories + recent posts */}
-        <aside className="space-y-8" aria-label="Sidebar">
-          <div className="border border-[#ddd] p-4">
-            <h6 className="font-display text-base font-bold capitalize tracking-wider text-ink">Post categories</h6>
-            <ul className="mt-3 space-y-1 text-sm">
-              {SECTIONS.map((s) => {
-                const active = s.slug === category;
-                return (
-                  <li key={s.slug}>
-                    <Link
-                      href={`/${s.slug}`}
-                      className={
-                        active
-                          ? 'block rounded-md bg-primary/10 px-3 py-1.5 font-semibold text-primary'
-                          : 'block rounded-md px-3 py-1.5 text-ink/75 transition hover:bg-paper/60 hover:text-ink'
-                      }
-                    >
-                      {s.title}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {recentPosts.length > 0 && (
-            <div className="border border-[#ddd] p-4">
-              <h6 className="font-display text-base font-bold capitalize tracking-wider text-ink">Recent posts</h6>
-              <ul className="mt-3 space-y-4">
-                {recentPosts.map((p) => {
-                  const img = mediaUrl(p.coverImage ?? null) ?? firstImageUrl(p.content);
-                  return (
-                    <li key={p.id}>
-                      <Link
-                        href={postPath(p)}
-                        className="group grid grid-cols-[64px_minmax(0,1fr)] items-start gap-3 text-sm leading-snug text-ink/85 transition-colors hover:text-primary"
-                      >
-                        {img ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={img}
-                            alt={p.coverImage?.alternativeText || p.title}
-                            className="mx-auto aspect-square w-[70%] rounded bg-[#f7f7f7] object-cover"
-                          />
-                        ) : (
-                          <div className="mx-auto aspect-square w-[70%] rounded bg-[#f7f7f7]" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="line-clamp-2 !text-[14px] !font-medium">{p.title}</p>
-                          <p className="mt-1 !text-[12px] text-ink/55">{fmtDate(p.publishedAt)}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </aside>
+        <ArticleSidebar
+          categoryTiles={categoryTiles}
+          popular={popularRows}
+          recent={recentRows}
+        />
       </div>
+
     </article>
+
+    {related.length > 0 && (
+      <section className="border-t border-ink/10 bg-muted/40 py-14" data-testid="more-in-category">
+        <div className="mx-auto max-w-7xl px-6">
+          <h2 className="font-display text-2xl font-bold tracking-tight text-ink">More in {cat?.name ?? categoryName(category)}</h2>
+          <div className="mt-6">
+            <RelatedCarousel posts={related} />
+          </div>
+        </div>
+      </section>
+    )}
+    </>
   );
 }

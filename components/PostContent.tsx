@@ -28,9 +28,15 @@ export default function PostContent({ html }: { html: string }) {
 
     const items = root.querySelectorAll<HTMLElement>('.gs-accordion-item');
     const cleanups: Array<() => void> = [];
+    // Track the first item per accordion so question 1 starts open.
+    const openedFirst = new Set<Element>();
 
     items.forEach((item) => {
-      item.classList.add('gsclose');
+      const accordion = item.closest('.gs-accordion') ?? root;
+      const isFirst = !openedFirst.has(accordion);
+      if (isFirst) openedFirst.add(accordion);
+      // Auto-open the first question of each accordion; collapse the rest.
+      if (!isFirst) item.classList.add('gsclose');
       const title = item.querySelector<HTMLElement>('.gs-accordion-item__title');
       if (!title) return;
       title.setAttribute('role', 'button');
@@ -41,7 +47,7 @@ export default function PostContent({ html }: { html: string }) {
         item.classList.toggle('gsclose');
         title.setAttribute('aria-expanded', String(!item.classList.contains('gsclose')));
       };
-      title.setAttribute('aria-expanded', 'false');
+      title.setAttribute('aria-expanded', String(isFirst));
       title.addEventListener('click', onActivate);
       title.addEventListener('keydown', onActivate);
       cleanups.push(() => {

@@ -110,7 +110,7 @@ export default async function HtmlSitemapPage() {
                     {productCats.map((category) => (
                       <li key={category.slug}>
                         <Link
-                          href={`/products?category=${category.slug}`}
+                          href={`/categories/${category.slug}`}
                           className="group flex items-baseline justify-between gap-4 rounded-lg px-3 py-2 transition hover:bg-paper"
                         >
                           <span className="truncate text-sm text-ink/80 group-hover:text-primary">

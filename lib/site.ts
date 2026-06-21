@@ -8,6 +8,7 @@ export const SITE = {
   social: {
     facebook: 'https://www.facebook.com/bestlookingskin',
     twitter: 'https://x.com/bestlookingskin',
+    whatsapp: 'https://wa.me/15551234567',
   },
 };
 
